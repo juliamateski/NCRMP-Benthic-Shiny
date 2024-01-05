@@ -1,0 +1,2950 @@
+---
+title: ''
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Set up
+
+```{r flk_notes, include = FALSE}
+# FLORIDA KEYS (FLK) NCRMP Memo RMD
+
+# Objects requiring updates include "_update_req" in section heading
+```
+
+```{r, include = FALSE}
+# LIBRARIES 
+library(dplyr)
+library(ncrmp.benthics.analysis)
+library(magrittr)
+library(ggplot2)
+library(gridExtra)
+library(cowplot)
+library(viridis)
+library(rcartocolor)
+library(sp)
+library(ggpubr)
+
+
+source("H:\\Projects\\NCRMP\\NCRMP_QAQC\\Analysis_Rmd\\Tech_Memo_Rmds\\theme_publication.R")
+
+```
+
+# Load grids and data
+
+```{r year_objects_update_req, include = FALSE}
+# Year Objects 
+
+## Sample Year (Update table object)
+samp_year <- max(ncrmp.benthics.analysis::FLK_2022_NTOT$YEAR)
+## Current Year (Update year value)
+current_year <- 2023
+## Grid Size for Mean Density Plot
+#grid_size <- 100 -- this is wrong right?
+grid_size <- 50
+```
+
+
+```{r table_objects_update_req, include = FALSE}
+# Table Objects - Update Required Each Year/Data Refresh
+
+## Coral/Microalgae Coverage (Update table object)
+FLK_Cvr <- NCRMP_FLK_2014_22_cover_region %>% filter(YEAR != 2020) #Update
+
+## Occ Den CV (Update table object. Leave YEAR and arrange as-is)
+FLK_Occ <- filter(NCRMP_DRM_FLK_Occ_Den_CV_20,
+                  YEAR == samp_year) %>%
+  arrange(desc(avDen))
+
+## FOI (Update table object. Leave YEAR and arrange as-is)
+FLK_FOI <- filter(NCRMP_ESA_FOI_region,
+                  YEAR == samp_year,
+                  REGION == "FLK")  
+
+## Bleaching (Update table object)
+# only use NCRMP years
+FLK_ble_prev <- NCRMP_DRM_FLK_2014_22_ble_prev_species_region %>% filter(YEAR == 2014 | YEAR == 2016 | YEAR == 2018 | YEAR == 2022) #not enough replicates in 2021 for analysis
+
+## Disease (Update table object)
+FLK_dis_prev <- NCRMP_DRM_FLK_2014_22_dis_prev_species_region  %>% filter(YEAR == 2014 | YEAR == 2016 | YEAR == 2018 | YEAR == 2022) #not enough replicates in 2021 for analysis
+
+## Density (Update table object)
+FLK_den <- NCRMP_DRM_FLK_2014_22_density_region  %>% filter(YEAR == 2014 | YEAR == 2016 | YEAR == 2018 | YEAR == 2022) #not enough replicates in 2021 for analysis
+
+## Density - Species (Update table object)
+FLK_des.species <- NCRMP_DRM_FLK_2014_22_density_species  %>% filter(YEAR == 2014 | YEAR == 2016 | YEAR == 2018 | YEAR == 2022) #not enough replicates in 2021 for analysis
+
+## Old Mortality (Update table object)
+FLK_om <- NCRMP_DRM_FLK_2014_22_old_mort_region  %>% filter(YEAR == 2014 | YEAR == 2016 | YEAR == 2018 | YEAR == 2022) #not enough replicates in 2021 for analysis
+
+## Surface Area (Update table object)
+FLK_s <- NCRMP_FLK_2014_22_col_size_region %>% filter(YEAR != 2020) #not enough replicates in 2021 for analysis
+
+## Analyzed Species List (Update List Based on Desires Species for Density Plot)
+
+analyzed_species <- c(
+  "ACR CERV", #A. cervicornis
+  "ACR PALM", #A. palmata
+  "ORB ANNU", #O. annularis
+  "ORB FRAN", #O. franksi
+  "ORB FAVE", #O. faveolata
+  "MEA MEAN", #M. meandrites
+  "DEN CYLI", #D. cylindrus
+  "PSE STRI", #A. cervicornis
+  "DIP LABI", #D. labyrinthiformis
+  "COL NATA", #C. natans
+  "SID SIDE", #S. siderea
+  "POR ASTE", #P. astreoides
+  "MON CAVE", #M. cavernosa
+  "AGA AGAR", #A. agaricites
+  "STE INTE" #S. inercepta
+)
+
+```
+
+
+```{r load species specific size and moratlity}
+# load species specific mortality
+om <- NCRMP_DRM_calculate_mortality(region = "FLK", project = "NCRMP_DRM")
+FLK_om_spp <- om$Domain_est_old_mort_species
+FLK_rm_spp <- om$Domain_est_rec_mort_species
+
+# load species specific size - using max diameter here because DRM doesn't collect what's needed for area or volume
+# note this is not standardized by mortality though***
+s <- NCRMP_DRM_calculate_mean_colony_size(region = "FLK", project = "NCRMP_DRM")
+FLK_s_spp <- s$Domain_est_species
+```
+
+
+```{r}
+# Weighted Means Inputs - Update Required Each Year
+
+FLK_NTOT <- FLK_2022_NTOT
+#FLK_coraldemo1 <- FLK_2022_coral_demographics #update with the most recent year
+#FLK_coraldemo2 <- FLK_2014_coral_demographics %>% mutate(YEAR = min(YEAR)) #no update needed
+FLK_weightedmeans <- dplyr::filter(NCRMP_DRM_FLK_Occ_Den_CV, YEAR == max(NCRMP_DRM_FLK_Occ_Den_CV$YEAR))
+```
+
+```{r functions, include = FALSE}
+# FUNCTIONS
+
+# Pull avCvr function
+# Input is relevant region df, cover group (ex. NCRMP_PRICO_2014_19_cover_region, "Hard Corals")
+# Output is avCvr for most recent year in df
+
+pull_avCvr <- function (df, grouping) {
+  df %>% 
+    filter(cover_group == toupper(grouping) & YEAR == max(YEAR)) %>%
+    pull(avCvr) %>% 
+    round(1) 
+}
+
+# Pull SE function
+# Input is relevant region df, cover group (ex. NCRMP_PRICO_2014_19_cover_region, "Hard Corals")
+# Output is SE for most recent year in df
+pull_se <- function(df, grouping) {
+  df %>% 
+    filter(cover_group == toupper(grouping) & YEAR == max(YEAR)) %>%
+    pull(SE) %>% 
+    round(2)
+}
+
+
+# Pull Top 3 Coral Bleach
+pull_ble_prev <- function (df) { 
+  df %>% 
+    filter(YEAR == max(YEAR)) %>% 
+    arrange(desc(avBlePrev))
+}
+
+# Pull Top 3 Coral Disease
+pull_dis_prev <- function (df) { 
+  df %>% 
+    filter(YEAR == max(YEAR)) %>% 
+    arrange(desc(avDisPrev))
+}
+
+# Pull Species FOI
+
+pull_foi <- function(x, y) {
+  NCRMP_ESA_FOI_species %>% 
+    filter(species == x & REGION == y & YEAR == samp_year) %>% 
+    pull(foi) * 100 -> foi.x
+  
+  ifelse(foi.x >= 10, round(foi.x,0),
+         ifelse(foi.x>1, round(foi.x,1),
+                round(foi.x, 2)))
+  
+}
+
+
+#Pull  Density & Mort. averages
+
+pull_demo_av <- function (df) {
+  df |> 
+    filter(YEAR == max(YEAR)) |>
+    pull(3) |> 
+    round(1) 
+}
+
+# Pull Density & Mort. SE
+pull_demo_se <- function(df) {
+  df |> 
+    filter(YEAR == max(YEAR)) |>
+    pull(SE) |> 
+    round(2)
+}
+
+
+#Pull  Size averages
+
+pull_size_av <- function (df) {
+  df |> 
+    filter(YEAR == max(YEAR)) |>
+    pull(avCm3) |> 
+    round(1) 
+}
+
+# Pull Size SE
+pull_size_se <- function(df) {
+  df |> 
+    filter(YEAR == max(YEAR)) |>
+    pull(SE_cm3) |> 
+    round(2)
+}
+
+
+
+
+### Density
+pull_avDen <- function (df) {
+  df |> 
+    filter(YEAR == max(YEAR)) |>
+    pull(avDen) |> 
+    round(1) 
+}
+
+```
+
+```{r benthic_variables, include= FALSE}
+# BENTHIC VARIABLES
+
+## Hard Corals Cover
+### Florida Keys (FLK) Hard Coral avCvr
+flk_hc_avCvr <- pull_avCvr(FLK_Cvr, "HARD CORALS")
+### Florida Keys (FLK) Hard Coral SE
+flk_hc_se <- pull_se(FLK_Cvr, "HARD CORALS")
+
+## Macroalgae Cover
+
+### Florida Keys (FLK) Macroalgae avCvr
+flk_macroal_avCvr <- pull_avCvr(FLK_Cvr, "MACROALGAE")
+### Florida Keys (FLK) Macroalgae SE
+flk_macroal_se <- pull_se(FLK_Cvr, "MACROALGAE")
+
+
+
+### density, mortality
+avDen <- pull_demo_av(FLK_den)
+avDen_se <- pull_demo_se(FLK_den)
+
+avOM <- pull_demo_av(FLK_om)
+avOM_se <- pull_demo_se(FLK_om)
+
+#avRM <- pull_demo_av(Rm)
+#avRM_se <- pull_demo_se(Rm)
+
+### and size
+avSize <- pull_size_av(FLK_s)
+avSize_se <- pull_size_se(FLK_s)
+
+```
+
+
+
+# Dynamic text
+
+## I. Benthic Community Results
+
+
+## Coral and Macroalgae Cover
+
+
+The mean coral cover for all regions shows a stable trend over time (Figure X). In `r samp_year`, mean coral cover was `r flk_hc_avCvr`% ± `r flk_hc_se`. Macroalgae cover has declined. In `r samp_year`, macroalgae cover was `r flk_macroal_avCvr`% ± `r flk_macroal_se`. Macroalgae cover is strongly influenced by the timing of the sampling season, the habitat type surveyed, and the specific functional group or species of macroalgae. 
+
+## Coral Species Occurrence
+
+NCRMP coral demographic survey results show that in `r samp_year`, only `r nrow(spp_cv)` individual species have CVs of 20% or better: *XXX*, *XXX*, *XXX*, and *XXX* (Figure X). A 20% CV can be translated to the ability to statistically detect a 40% change; therefore, a lower CV increases the sensitivity to detect changes in metrics (e.g., density, occurrence, condition). As coral species continue to decline from threats such as SCTLD, the frequency of occurrence declines and more surveys are required to achieve a 20% CV.  
+
+(TEXT HERE NEEDS TO BE UPDATED FROM FGB!!!)
+ESA-listed coral species were observed at `r round((FOI$foi * 100),0)`% of the `r FOI$Nsites` sites where ESA-listed species presence was surveyed as part of the benthic assessment in `r samp_year`. Individual ESA-listed species were observed at much lower frequencies (*Orbicella frankski* = `r pull_foi("OFRA", "FLK")`%, *Orbicella faveolata* = `r pull_foi("OFAV", "FLK")`% , and  *Orbicella annularis* = `r pull_foi("OANN", "FLK")`%. *Acropora cervicornis*,  *Acropora palmata*, *Dendrogyra cylindrus*, and *Mycetophyllia ferox* were not observed.
+
+## Coral Demographics
+
+The mean density of corals in FLK in `r samp_year` were dominated by the following species: *`r top_occ[1,1]`*, *`r top_occ[2,1]`*, *`r top_occ[3,1]`*, *`r top_occ[4,1]`*, *`r top_occ[5,1]`*, and *`r top_occ[6,1]`* (Figure X).
+
+
+Adult coral density has declined over time (Figure X), but the change has only been significant between 2015 and 2022. In `r samp_year`, mean density was `r avDen` corals per m2 ± `r avDen_se`. Mean old mortality has remained consistently low (< 6%) and was `r avOM` (%) ± `r avOM_se` in `r samp_year`. 
+
+
+In Figure X, colony size is represented by the total 3-dimensional surface area of live coral tissue on coral colonies. In the FGB, mean coral colony size has been consistent. A comparison of binned relative length frequencies for select coral species shows that maximum colony length variable between species and size classes (Figures ). The following species were selected for each sub-jurisdiction: *Colpopphyllia natans*, *Orbicella faveolata*, *Orbicella frankski*, and *Pseudodiploria strigosa*. The species shown here were selected based on CV, ESA status, SCTLD susceptibility and ecological (e.g., reef building capability) value. Colony size is an important component of colony density. While small colonies collectively can lead to a high density, this does not equate with a high density of large, healthy, reef building corals. The FGB is the only NCRMP Atlantic region where mean colony size for most species is not decreasing.  
+
+
+## Coral Bleaching and Disease 
+
+Bleaching and disease were present and recorded on a variety of coral species. Figures X and X show the bleaching and disease prevalence, respectively, by coral species for the `r samp_year` sampling year. Prevalence here is defined as the mean percentage of corals with any bleaching/disease, out of the total number of corals by species for all sites. *Orbicella faveolata* had the highest prevalence of both bleaching and disease *`r pull_dis_prev(FLK_dis_prev)[1,3]`*, *`r pull_dis_prev(FLK_dis_prev)[2,3]`*, *`r pull_dis_prev(dis_prev)[3,3]`*, *`r pull_dis_prev(dis_prev)[4,3]`*, and *`r pull_dis_prev(dis_prev)[5,3]`* in `r samp_year`. 
+
+
+
+
+# Plots  
+
+
+# Hard coral and macroalgae plots
+
+```{r hard_coral_and_macroalgae_plots, include=FALSE}
+#Hard Coral and Microalgae Plots (Update NOT required unless formatting requires adjustment)
+
+##Hard coral Coverage Plot
+
+#Call in Coverage Table
+FLK.plot.ccov <- FLK_Cvr %>%
+  #filter only for hard corals
+  dplyr::filter(cover_group == "HARD CORALS") %>%
+  #Use Perform T Test Function...
+  NCRMP_perform_ttest( 
+    metric1 = 'coral_cover', 
+    metric2 = 'avCvr', 
+    test_type = "Years",
+    alpha = 0.05,
+    #...where N Years = Number of unique years in Coverage Table...
+    n_years = length(unique(FLK_Cvr$YEAR)),
+    #...and return the Data Frame
+    return_dataframe = T) %>%
+  mutate(
+    #Create a Significance column calculated by..
+    Significance = 
+      if_else(
+        #...if YEAR is earliest Year in table (ex. 2014),Significance = FALSE
+        YEAR == min(YEAR), FALSE, 
+        #...otherwise...
+        if_else(
+          #...if the previous year's avg. cover is in the current LCI/UCI range (or vice verse), Significance = FALSE...
+          (lag(avCvr)>= LCI & lag(avCvr)<= UCI) |
+            (avCvr >= lag(LCI) & avCvr <= lag(UCI)),  
+          FALSE,
+          #...else (i.e. the avg cover is outside of the LCI/UCI range), Significance = TRUE
+          TRUE 
+        )
+      ),
+    #Label is a cumulative sum of significance converted to letters with a baseline of "a" for Year 1
+    #i.e. when the next year is significant, Label becomes "b"
+    Label = letters[cumsum(Significance == TRUE)+ 1],
+    #Factorize Year
+    YEAR = as.factor(as.character(YEAR)),
+    facet_label = "Hard corals"
+  ) 
+
+##Macroalgae Coverage 
+
+#Call in Coverage Table
+FLK.plot.mcov <- FLK_Cvr %>%
+  #Filter only for microalgae
+  dplyr::filter(cover_group == "MACROALGAE") %>%
+  #Use Perform T Test Function...
+  NCRMP_perform_ttest(
+    metric1 = 'macroalgae_cover', 
+    metric2 = 'avCvr',
+    test_type = "Years",
+    #...where N Years = Number of unique years in Coverage Table
+    alpha = 0.05,
+    n_years = length(unique(FLK_Cvr$YEAR)),
+    #...and return the Data Frame
+    return_dataframe = T) %>%
+  mutate(
+    #Create a Significance column calculated by...
+    Significance = 
+      if_else(
+        #...if YEAR is earliest Year in table (ex. 2014),Significance = FALSE...
+        YEAR == min(YEAR), FALSE,
+        #...otherwise...
+        if_else(
+          #...if the previous year's avg. cover is in the current LCI/UCI range (or vice verse), Significance = FALSE...
+          (lag(avCvr)>= LCI & lag(avCvr)<= UCI) |
+            (avCvr >= lag(LCI) & avCvr <= lag(UCI)),
+          FALSE,
+          #...else (i.e. the avg cover is outside of the LCI/UCI range), Significance = TRUE
+          TRUE
+        )
+      ),
+    #Label is a cumulative sum of significance converted to letters with a baseline of "a" for Year 1
+    # I.E. when the next year is significant, Label becomes "b"
+    Label = letters[cumsum(Significance == TRUE)+ 1], 
+    # Factorize Year
+    YEAR = as.factor(as.character(YEAR)),
+    facet_label = "Macroalgae"
+  )
+
+
+FLK.plot.cov <- dplyr::bind_rows(FLK.plot.ccov, FLK.plot.mcov) %>%
+  ggplot(aes(x = YEAR, 
+             y = avCvr,
+             group = 1,
+             color = REGION,
+             label = Label)) +
+  #point
+  geom_point(size = 2, color = "black") +
+  #line 
+  geom_line(size = 2, color = "black") +
+  #labels based on t-test significance
+  #geom_text(hjust=-.5, vjust=-1.75, size = 7, face = "bold", color = "black") + # this isn't quite right, remove for now
+  #geom_text(x=2020, y=5, label="*") +
+  # SE error bars
+  geom_errorbar(aes(x = YEAR, 
+                    ymin = avCvr - SE, 
+                    ymax = avCvr + SE), 
+                width = .1, color = "black") +
+  scale_y_continuous(limits = c(0, 25)) +
+  # set color ramp
+  # scale_color_viridis(discrete = TRUE, 
+  #                     option = "D",
+  #                     begin = 0,
+  #                     end = 0.5,
+  #                     direction = -1) +
+  labs(x = "Year", 
+       y = "Cover (%)", 
+       title = "Florida Keys") +
+  scale_x_discrete(limit = as.character(c(2014:2022))) +
+  #scale_y_continuous(limits = c(0, NA)) +
+  theme_Publication(base_size = 20) +
+  facet_wrap(~facet_label, ncol=2)
+
+ggsave("FLK.plot.cov.jpeg", 
+       path = "K:/_BioGeoProjects/NCRMP/Data Analysis/Analysis ready data/Data Queries/CRCP Reports & Requests/NCRMP_tech_memo/Florida 2022/Figures_with_DRM_data",
+       width = 12, 
+       height = 7,
+       dpi = 300)
+
+
+# run t tests
+NCRMP_perform_ttest(dataframe = FLK_Cvr %>% dplyr::filter(cover_group == "HARD CORALS"), 
+    metric1 = 'coral_cover', 
+    metric2 = 'avCvr', 
+    test_type = "Years",
+    alpha = 0.05,
+    #...where N Years = Number of unique years in Coverage Table...
+    n_years = length(unique(FLK_Cvr$YEAR)),
+    #...and return the Data Frame
+    return_dataframe = F)
+
+NCRMP_perform_ttest(dataframe = FLK_Cvr %>% dplyr::filter(cover_group == "MACROALGAE"), 
+    metric1 = 'macroalgae_cover', 
+    metric2 = 'avCvr', 
+    test_type = "Years",
+    alpha = 0.05,
+    #...where N Years = Number of unique years in Coverage Table...
+    n_years = length(unique(FLK_Cvr$YEAR)),
+    #...and return the Data Frame
+    return_dataframe = F)
+
+```
+
+
+##(Combined) Coral and Macroalgal Plot
+```{r}
+plot.ccov <- FLK_Cvr |> 
+  dplyr::filter(cover_group == "HARD CORALS") |> #Use Perform T Test Function...
+  NCRMP_perform_ttest( 
+    metric1 = 'coral_cover', 
+    metric2 = 'avCvr', 
+    test_type = "Years",
+    alpha = 0.05,
+    #...where N Years = Number of unique years in Coverage Table...
+    n_years = length(unique(FLK_Cvr$YEAR)),
+    #...and return the Data Frame
+    return_dataframe = T) |> 
+  mutate(
+    #Create a Significance column calculated by..
+    Significance = 
+      if_else(
+        #...if YEAR is earliest Year in table (ex. 2014),Significance = FALSE
+        YEAR == min(YEAR), FALSE, 
+        #...otherwise...
+        if_else(
+          #...if the previous year's avg. cover is in the current LCI/UCI range (or vice verse), Significance = FALSE...
+          (lag(avCvr)>= LCI & lag(avCvr)<= UCI) |
+            (avCvr >= lag(LCI) & avCvr <= lag(UCI)),  
+          FALSE,
+          #...else (i.e. the avg cover is outside of the LCI/UCI range), Significance = TRUE
+          TRUE 
+        )
+      ),
+    #Label is a cumulative sum of significance converted to letters with a baseline of "a" for Year 1
+    #i.e. when the next year is significant, Label becomes "b"
+    Label = letters[cumsum(Significance == TRUE)+ 1], 
+    #Factorize Year
+    YEAR = as.factor(as.character(YEAR)),
+    facet_label = "Hard corals"
+  ) |> 
+  # change labels
+  dplyr::mutate(region = dplyr::case_when(REGION == "GOM" ~ "Flower Garden Banks") )
+
+plot.mcov <- FLK_Cvr |> 
+  dplyr::filter(cover_group == "MACROALGAE") |> #Use Perform T Test Function...
+  NCRMP_perform_ttest( 
+    metric1 = 'macroalgae_cover', 
+    metric2 = 'avCvr', 
+    test_type = "Years",
+    alpha = 0.05,
+    #...where N Years = Number of unique years in Coverage Table...
+    n_years = length(unique(FLK_Cvr$YEAR)),
+    #...and return the Data Frame
+    return_dataframe = T) |> 
+  mutate(
+    #Create a Significance column calculated by..
+    Significance = 
+      if_else(
+        #...if YEAR is earliest Year in table (ex. 2014),Significance = FALSE
+        YEAR == min(YEAR), FALSE, 
+        #...otherwise...
+        if_else(
+          #...if the previous year's avg. cover is in the current LCI/UCI range (or vice verse), Significance = FALSE...
+          (lag(avCvr)>= LCI & lag(avCvr)<= UCI) |
+            (avCvr >= lag(LCI) & avCvr <= lag(UCI)),  
+          FALSE,
+          #...else (i.e. the avg cover is outside of the LCI/UCI range), Significance = TRUE
+          TRUE 
+        )
+      ),
+    #Label is a cumulative sum of significance converted to letters with a baseline of "a" for Year 1
+    #i.e. when the next year is significant, Label becomes "b"
+    Label = letters[cumsum(Significance == TRUE)+ 1],
+    # Factorize Year
+    YEAR = as.factor(as.character(YEAR)),
+    facet_label = "Macroalgae"
+  ) |> 
+  # change labels
+  dplyr::mutate(region = dplyr::case_when(REGION == "FLK" ~ "Florida Keys") )
+
+
+
+FLK.plot.cov <- dplyr::bind_rows(plot.ccov, plot.mcov) %>%
+  ggplot(aes(x = YEAR, 
+             y = avCvr,
+             group = cover_group,
+             color = cover_group,
+             #linetype = cover_group,
+             #,
+             #label = Label
+             )) +
+  #point
+  geom_point(size = 2) + #, color = "black") +
+  #line 
+  geom_line(size = 2)+ #, color = "black") +
+  #labels based on t-test significance
+  #geom_text(hjust=-.5, vjust=-1.75, size = 7, face = "bold", color = "black") +
+  #geom_text(x=2020, y=5, label="*") +
+  # SE error bars
+  geom_errorbar(aes(x = YEAR, 
+                    ymin = avCvr - SE, 
+                    ymax = avCvr + SE), 
+                width = .1) + 
+  scale_color_manual(values=c('deepskyblue4','springgreen4'), name = "")+
+  #scale_linetype_manual(values = c('dotted', 'solid')) +
+  # set color ramp
+  # scale_color_viridis(discrete = TRUE, 
+  #                     option = "D",
+  #                     begin = 0,
+  #                     end = 0.5,
+  #                     direction = -1) +
+  labs(x = "Year", 
+       y = "Cover (%)", 
+       title = "Florida Keys") +
+  scale_x_discrete(limit = as.character(c(2014:samp_year))) +
+              #,
+              #legend.title = element_text(face="italic")
+  scale_y_continuous(limits = c(0, NA)) +
+  theme_Publication(base_size = 20) +
+  theme(
+   legend.position = "bottom",
+              legend.direction = "horizontal",
+              legend.key.size= unit(1.2, "cm"),
+              legend.margin = margin(0,0,0,0, "cm"), 
+              legend.text = element_text(size=18))
+  #facet_wrap(~facet_label, ncol=2)
+
+
+FLK.plot.cov
+
+ggsave("FLK.plot.cov_combined.jpeg",
+       path = "K:/_BioGeoProjects/NCRMP/Data Analysis/Analysis ready data/Data Queries/CRCP Reports & Requests/NCRMP_tech_memo/Florida 2022/Figures_with_DRM_data",
+       width = 10,
+       height = 10,
+       dpi = 300)
+# # 
+FLK.plot.cov
+
+
+```
+
+
+# CV and occurence plots
+
+```{r cv occurence plot, include=FALSE}
+NCRMP_colony_density_CV_and_occurrence <- function (region, ptitle, species_filter = "NULL") 
+{
+  if (species_filter == TRUE) {
+    if (region == "STX" || region == "STTSTJ") {
+      coral_species <- c("Orbicella annularis", "Orbicella faveolata", 
+                         "Orbicella franksi", "Acropora cervicornis", 
+                         "Acropora palmata", "Dendrogyra cylindrus", 
+                         "Mycetophyllia ferox", "Colpophyllia natans", 
+                         "Dichocoenia stokesii", "Diploria labyrinthiformis", 
+                         "Eusmilia fastigiata", "Meandrina meandrites", 
+                         "Pseudodiploria strigosa", "Pseudodiploria clivosa")
+    }
+    if (region == "PRICO") {
+      coral_species <- c("Orbicella annularis", "Orbicella faveolata", 
+                         "Orbicella franksi", "Acropora cervicornis", 
+                         "Acropora palmata", "Dendrogyra cylindrus", 
+                         "Mycetophyllia ferox", "Colpophyllia natans", 
+                         "Dichocoenia stokesii", "Diploria labyrinthiformis", 
+                         "Eusmilia fastigiata", "Meandrina meandrites", 
+                         "Pseudodiploria strigosa", "Pseudodiploria clivosa")
+    }
+    if (region == "FLK") {
+      coral_species <- c("Colpophyllia natans", "Montastraea cavernosa", 
+                         "Orbicella faveolata", "Porites astreoides", 
+                         "Siderastrea siderea", "Solenastrea bournoni")
+    }
+    if (region == "Tortugas") {
+      coral_species <- c("Colpophyllia natans", "Montastraea cavernosa", 
+                         "Orbicella faveolata", "Porites astreoides", 
+                         "Orbicella franksi", "Stephanocoenia intersepta")
+    }
+    if (region == "SEFCRI") {
+      coral_species <- c("Acropora cervicornis", 
+                         "Dichocoenia stokesii", "Montastraea cavernosa", 
+                         "Porites astreoide", "Pseudodiploria strigosa", 
+                         "Siderastrea siderea")
+    }
+  }
+  if (region == "FLK") {
+    region_means <- NCRMP_make_weighted_density_CV_data(region = region, 
+                                                        sppdens = NCRMP_DRM_FLK_2014_22_density_species,
+                                                        project = "NCRMP_DRM")
+  }
+  if (region == "Tortugas") {
+    region_means <- NCRMP_make_weighted_density_CV_data(region = region, 
+                                                        sppdens = NCRMP_DRM_Tort_2014_22_density_species)
+  }
+  if (region == "SEFCRI") {
+    region_means <- NCRMP_make_weighted_density_CV_data(region = region, 
+                                                        sppdens = NCRMP_DRM_SEFCRI_2014_22_density_species)
+  }
+  
+  if (species_filter == TRUE) {
+    region_means <- region_means %>% dplyr::filter(SPECIES_CD %in% 
+                                                     coral_species)
+  }
+  
+    g.mid <- region_means %>% dplyr::filter(occurrence > 
+                                              0.01, YEAR >= samp_year) %>%
+      dplyr::filter(CV < 1) %>% 
+      ggplot(., aes(x = 1, y = reorder(SPECIES_CD, occurrence))) + 
+      geom_text(aes(label = SPECIES_CD), size = 5, fontface = "italic") + 
+      geom_segment(aes(x = 0.94, xend = 0.96, yend = SPECIES_CD)) + 
+      geom_segment(aes(x = 1.04, xend = 1.065, yend = SPECIES_CD)) + 
+      ggtitle(ptitle) +
+      ylab(NULL) + 
+      scale_x_continuous(expand = c(0,0), limits = c(0.94, 1.065)) +
+      theme(axis.title = element_blank(), 
+            panel.grid = element_blank(),
+            axis.text.y = element_blank(), 
+            axis.ticks.y = element_blank(),
+            panel.background = element_blank(), 
+            axis.text.x = element_text(color = NA),
+            axis.ticks.x = element_line(color = NA), 
+            plot.margin = unit(c(t = 1, r = -1, b = 1, l = -1), "mm"),
+            #plot.title = element_text(hjust = 0.5, size = 12, face = "bold"),
+            plot.title = element_text(hjust = 0.5)
+            )
+    
+    g1 <- region_means %>% dplyr::filter(occurrence > 0.01, 
+                                         YEAR >= samp_year) %>%
+      dplyr::filter(CV < 1) %>%
+      ggplot(., aes(x = reorder(SPECIES_CD, occurrence), y = occurrence, 
+                    fill = "even")) + geom_bar(stat = "identity", 
+                                               fill = "deepskyblue4") +
+      ggtitle(paste("Species", "occurrence", sep = " ")) +
+      theme_light() + 
+      scale_y_continuous(expand = c(0, 0)) +
+      theme(axis.title.x = element_blank(), 
+            axis.title.y = element_blank(),
+            axis.text.y = element_blank(),
+            axis.text.x = element_text(size = 12, face = 'bold'),
+            axis.ticks.y = element_blank(),
+            plot.margin = unit(c(t = 1,  r = -0.5, b = 1, l = 1), "mm"),
+            plot.title = element_text(hjust = 0.5, size = 12, face = "bold")) +
+      coord_flip() + 
+      scale_y_reverse(expand = c(0.01, 0)) +
+      guides(fill = "none")
+    
+    g2 <- region_means %>% dplyr::filter(occurrence > 0.01, 
+                                         YEAR >= samp_year) %>%
+      dplyr::filter(CV < 1) %>%
+      ggplot(data = ., aes(x = reorder(SPECIES_CD, occurrence), y = CV*100, fill = "even")) +
+      xlab(NULL) + 
+      geom_bar(stat = "identity", fill = "deepskyblue4") +
+      ggtitle("Coefficient of Variation (CV) of density") + 
+      theme_light() +
+      scale_y_continuous(expand = c(0.01,0)) +
+      theme(axis.title.x = element_blank(),
+            axis.title.y = element_blank(), 
+            axis.text.y = element_blank(),
+            axis.text.x = element_text(size = 12, face = 'bold'),
+            axis.ticks.y = element_blank(), 
+            plot.margin = unit(c(t = 1, r = 1, b = 1, l = -2), "mm"),
+            plot.title = element_text(hjust = 0.5, size = 12, face = "bold")) +
+      geom_hline(yintercept=20, linetype="dashed", color = "black") +
+      coord_flip() + 
+      guides(fill = "none")
+    
+  return(cowplot::plot_grid(g1, g.mid, g2, ncol = 3))
+}
+
+```
+
+```{r, include = FALSE}
+# path <- "K:/_BioGeoProjects/NCRMP/Data Analysis/Analysis ready data/Data Queries/CRCP Reports & Requests/NCRMP_tech_memo/Florida 2022/Figures_with_DRM_data"
+# 
+# NCRMP_colony_density_CV_and_occurrence(region = "FLK",
+#                                        ptitle = "Florida Keys",
+#                                        project = "NCRMP_DRM",
+#                                        file_path = path ,
+#                                        year = 2022,
+#                                        species_filter = "NULL")
+
+
+FLK.plot.cv_occ <- NCRMP_colony_density_CV_and_occurrence("FLK", "Florida Keys")
+
+ggsave("FLK.plot.cv_occ_withDRM.jpeg", 
+       path = "K:/_BioGeoProjects/NCRMP/Data Analysis/Analysis ready data/Data Queries/CRCP Reports & Requests/NCRMP_tech_memo/Florida 2022/Figures_with_DRM_data",
+       width = 12, 
+       height = 10,
+       dpi = 300)
+
+```
+
+
+# Density and mortality  plots
+```{r densitity and mortality, message=FALSE, warning=FALSE}
+# images - coral dens, mortality, surface area - code only
+# in Aug 2023, we updated these to eliminate size part of the plot
+
+## Density Plot
+
+#Call in Density Table
+FLK.plot.dens <- FLK_den %>% 
+  #Use Perform T Test Function...
+  NCRMP_perform_ttest( 
+    metric1 = 'density', 
+    metric2 = 'avDen', 
+    test_type = "Years",
+    alpha = 0.05,
+    #...where N Years = Number of unique years in Density Table...
+    n_years = length(unique(FLK_den$YEAR)), 
+    #...And return the Data Frame
+    return_dataframe = T) %>%
+  mutate(
+    #Create a Significance column calculated based on...
+    Significance = 
+      #.. if the YEAR is the earliest measured year(ex. 2014), Significance is False...
+      if_else(
+        YEAR == min(YEAR), FALSE, 
+        #..otherwise...
+        if_else( 
+          #..if the previous year's average density is in the current LCI/UCI range (or vice verse), then Significance = False
+          (lag(avDen)>= LCI & lag(avDen)<= UCI) |
+            (avDen >= lag(LCI) & avDen <= lag(UCI)),
+          FALSE, 
+          #Else (the avg density falls outside of the other year's LCI/UCI range), Significance = True
+          TRUE 
+        )
+      ),
+    #Label is a cumulative sum of significance converted to letters with a baseline of "a" for Year 1
+    # I.E. when the next year is significant, Label becomes "b"
+    Label = letters[cumsum(Significance == TRUE)+ 1], 
+    #Factorize YEAR
+    YEAR = as.factor(as.character(YEAR)),
+    facet_label = "Coral density",
+    metric = avDen
+  )
+
+## Old Mortality Plot
+
+#Call in old morality table
+FLK.plot.om <- FLK_om %>%
+  #Use Perform T Test Function...
+  NCRMP_perform_ttest( 
+    metric1 = 'old_mortality', 
+    metric2 = 'avMort', 
+    test_type = "Years",
+    alpha = 0.05,
+    #...where N Years = Number of unique years in Old Mortality Table...
+    n_years = length(unique(FLK_om$YEAR)), 
+    #...And return the Data Frame
+    return_dataframe = T) %>%
+  mutate(
+    #Create a Significance column calculated based on...
+    Significance = 
+      #.. if the YEAR is the earliest measured year(ex. 2014), Significance is False...
+      if_else(
+        YEAR == min(YEAR), FALSE, 
+        #..otherwise...
+        if_else( 
+          #..if the previous year's average mortality is in the current LCI/UCI range (or vice verse), then Significance = False
+          (lag(avMort)>= LCI & lag(avMort)<= UCI) |
+            (avMort >= lag(LCI) & avMort <= lag(UCI)),
+          FALSE, 
+          #Else (the avg mortality falls outside of the other year's LCI/UCI range), Significance = True
+          TRUE 
+        )
+      ),
+    #Label is a cumulative sum of significance converted to letters with a baseline of "a" for Year 1
+    # I.E. when the next year is significant, Label becomes "b"
+    Label = letters[cumsum(Significance == TRUE)+ 1], 
+    #Factorize YEAR
+    YEAR = as.factor(as.character(YEAR)),
+    facet_label = "Old mortality",
+    metric = avMort
+  )
+
+
+#Plot
+FLK.plot.demo <- dplyr::bind_rows(FLK.plot.dens, FLK.plot.om)
+
+FLK.plot.demo$facet_label <- factor(FLK.plot.demo$facet_label,
+                                    levels=c("Coral density","Old mortality"),
+                                    labels=c(expression("Density~(corals/m^{2})"),expression("Old"~"mortality (%)")))
+
+ggplot(FLK.plot.demo, aes(x = YEAR, 
+                          y =  metric,
+                          group = 1,
+                          color = REGION,
+                          label = Label
+)) +
+  #point
+  geom_point(size = 2, color = "black") +
+  #line 
+  geom_line(aes(x = YEAR, 
+                y =  metric), size = 2, color = "black") +
+  #labels based on t-test significance
+  #geom_text(hjust=-.5, vjust=-.5, size = 7, face = "bold", color = "black") +
+  # SE error bars
+  geom_errorbar(aes(x = YEAR, 
+                    ymin = metric - SE, 
+                    ymax = metric + SE), 
+                width = .1, color = "black") +
+  # set color ramp
+  # scale_color_viridis(discrete = TRUE, 
+  #                     option = "D",
+  #                     begin = 0,
+  #                     end = 0.5,
+  #                     direction = -1) +
+  labs(x = "Year", 
+       #y = "Cover (%)", 
+       title = "Florida Keys") +
+  scale_x_discrete(limit = as.character(c(2014:2022))) +
+  theme_Publication(base_size = 20) +
+  theme (strip.placement = "outside",
+         axis.title.y = element_blank()) +
+  facet_wrap(~facet_label, nrow=3, scales = "free_y", strip.position = "left", labeller = label_parsed)
+
+ggsave("FLK.plot.demo_withDRM_withoutsize.jpeg", 
+       path = "K:/_BioGeoProjects/NCRMP/Data Analysis/Analysis ready data/Data Queries/CRCP Reports & Requests/NCRMP_tech_memo/Florida 2022/Figures_with_DRM_data",
+       width = 15, 
+       height = 7,
+       dpi = 300)
+
+
+
+FLK_den %>% 
+  #Use Perform T Test Function...
+  NCRMP_perform_ttest( 
+    metric1 = 'density', 
+    metric2 = 'avDen', 
+    test_type = "Years",
+    alpha = 0.05,
+    #...where N Years = Number of unique years in Density Table...
+    n_years = length(unique(FLK_den$YEAR)), 
+    #...And return the Data Frame
+    return_dataframe = F)
+
+FLK_om %>%
+  #Use Perform T Test Function...
+  NCRMP_perform_ttest( 
+    metric1 = 'old_mortality', 
+    metric2 = 'avMort', 
+    test_type = "Years",
+    alpha = 0.05,
+    #...where N Years = Number of unique years in Old Mortality Table...
+    n_years = length(unique(FLK_om$YEAR)), 
+    #...And return the Data Frame
+    return_dataframe = F)
+```
+
+
+```{r densitity mortality and surface area, message=FALSE, warning=FALSE}
+# images - coral dens, mortality, surface area - code only
+
+## Density Plot
+
+#Call in Density Table
+FLK.plot.dens <- FLK_den %>% 
+  #Use Perform T Test Function...
+  NCRMP_perform_ttest( 
+    metric1 = 'density', 
+    metric2 = 'avDen', 
+    test_type = "Years",
+    alpha = 0.05,
+    #...where N Years = Number of unique years in Density Table...
+    n_years = length(unique(FLK_den$YEAR)), 
+    #...And return the Data Frame
+    return_dataframe = T) %>%
+  mutate(
+    #Create a Significance column calculated based on...
+    Significance = 
+      #.. if the YEAR is the earliest measured year(ex. 2014), Significance is False...
+      if_else(
+        YEAR == min(YEAR), FALSE, 
+        #..otherwise...
+        if_else( 
+          #..if the previous year's average density is in the current LCI/UCI range (or vice verse), then Significance = False
+          (lag(avDen)>= LCI & lag(avDen)<= UCI) |
+            (avDen >= lag(LCI) & avDen <= lag(UCI)),
+          FALSE, 
+          #Else (the avg density falls outside of the other year's LCI/UCI range), Significance = True
+          TRUE 
+        )
+      ),
+    #Label is a cumulative sum of significance converted to letters with a baseline of "a" for Year 1
+    # I.E. when the next year is significant, Label becomes "b"
+    Label = letters[cumsum(Significance == TRUE)+ 1], 
+    #Factorize YEAR
+    YEAR = as.factor(as.character(YEAR)),
+    facet_label = "Coral density",
+    metric = avDen
+  )
+
+## Old Mortality Plot
+
+#Call in old morality table
+FLK.plot.om <- FLK_om %>%
+  #Use Perform T Test Function...
+  NCRMP_perform_ttest( 
+    metric1 = 'old_mortality', 
+    metric2 = 'avMort', 
+    test_type = "Years",
+    alpha = 0.05,
+    #...where N Years = Number of unique years in Old Mortality Table...
+    n_years = length(unique(FLK_om$YEAR)), 
+    #...And return the Data Frame
+    return_dataframe = T) %>%
+  mutate(
+    #Create a Significance column calculated based on...
+    Significance = 
+      #.. if the YEAR is the earliest measured year(ex. 2014), Significance is False...
+      if_else(
+        YEAR == min(YEAR), FALSE, 
+        #..otherwise...
+        if_else( 
+          #..if the previous year's average mortality is in the current LCI/UCI range (or vice verse), then Significance = False
+          (lag(avMort)>= LCI & lag(avMort)<= UCI) |
+            (avMort >= lag(LCI) & avMort <= lag(UCI)),
+          FALSE, 
+          #Else (the avg mortality falls outside of the other year's LCI/UCI range), Significance = True
+          TRUE 
+        )
+      ),
+    #Label is a cumulative sum of significance converted to letters with a baseline of "a" for Year 1
+    # I.E. when the next year is significant, Label becomes "b"
+    Label = letters[cumsum(Significance == TRUE)+ 1], 
+    #Factorize YEAR
+    YEAR = as.factor(as.character(YEAR)),
+    facet_label = "Old mortality",
+    metric = avMort
+  )
+
+## Surface Area Plot
+
+#Call in surface area table
+FLK.plot.surface <- FLK_s %>%
+  #Use Perform T Test Function...
+  NCRMP_perform_ttest(
+    metric1 = 'colony_size',
+    metric2 = 'avCm3',
+    test_type = "Years",
+    alpha = 0.05,
+    #...where N Years = Number of unique years in Surface Area Table...
+    n_years = length(unique(FLK_s$YEAR)),
+    #...And return the Data Frame
+    return_dataframe = T) %>%
+  mutate(
+    #Create a Significance column calculated based on...
+    Significance =
+      #.. if the YEAR is the earliest measured year(ex. 2014), Significance is False...
+      if_else(
+        YEAR == min(YEAR), FALSE,
+        #..otherwise...
+        if_else(
+          #..if the previous year's avg colony size is in the current LCI/UCI range (or vice verse), then Significance = False
+          (lag(avCm3)>= LCI & lag(avCm3)<= UCI) |
+            (avCm3 >= lag(LCI) & avCm3 <= lag(UCI)),
+          FALSE,
+          #Else (the avg colony size falls outside of the other year's LCI/UCI range), Significance = True
+          TRUE
+        )
+      ),
+    #Label is a cumulative sum of significance converted to letters with a baseline of "a" for Year 1
+    # I.E. when the next year is significant, Label becomes "b"
+    Label = letters[cumsum(Significance == TRUE)+ 1],
+    #Factorize YEAR
+    YEAR = as.factor(as.character(YEAR)),
+    facet_label = "Surface area",
+    metric = avCm3,
+    SE = SE_cm3
+  ) 
+#y=expression(Density~(m^{2})),
+
+#Plot
+FLK.plot.demo <- dplyr::bind_rows(FLK.plot.dens, FLK.plot.om, FLK.plot.surface)
+
+FLK.plot.demo$facet_label <- factor(FLK.plot.demo$facet_label,
+                                    levels=c("Coral density","Old mortality","Surface area"),
+                                    labels=c(expression("Density~(corals/m^{2})"),expression("Old"~"mortality (%)"), expression("Size~(cm^{3})")))
+
+ggplot(FLK.plot.demo, aes(x = YEAR, 
+                          y =  metric,
+                          group = 1,
+                          color = REGION,
+                          label = Label
+)) +
+  #point
+  geom_point(size = 2, color = "black") +
+  #line 
+  geom_line(aes(x = YEAR, 
+                y =  metric), size = 2, color = "black") +
+  #labels based on t-test significance
+  #geom_text(hjust=-.5, vjust=-.5, size = 7, face = "bold", color = "black") +
+  # SE error bars
+  geom_errorbar(aes(x = YEAR, 
+                    ymin = metric - SE, 
+                    ymax = metric + SE), 
+                width = .1, color = "black") +
+  # set color ramp
+  # scale_color_viridis(discrete = TRUE, 
+  #                     option = "D",
+  #                     begin = 0,
+  #                     end = 0.5,
+  #                     direction = -1) +
+  labs(x = "Year", 
+       #y = "Cover (%)", 
+       title = "Florida Keys") +
+  scale_x_discrete(limit = as.character(c(2014:2022))) +
+  theme_Publication(base_size = 20) +
+  theme (strip.placement = "outside",
+         axis.title.y = element_blank()) +
+  facet_wrap(~facet_label, nrow=3, scales = "free_y", strip.position = "left", labeller = label_parsed)
+
+ggsave("FLK.plot.demo_withDRM.jpeg", 
+       path = "K:/_BioGeoProjects/NCRMP/Data Analysis/Analysis ready data/Data Queries/CRCP Reports & Requests/NCRMP_tech_memo/Florida 2022/Figures_with_DRM_data",
+       width = 15, 
+       height = 10,
+       dpi = 300)
+
+
+
+FLK_den %>% 
+  #Use Perform T Test Function...
+  NCRMP_perform_ttest( 
+    metric1 = 'density', 
+    metric2 = 'avDen', 
+    test_type = "Years",
+    alpha = 0.05,
+    #...where N Years = Number of unique years in Density Table...
+    n_years = length(unique(FLK_den$YEAR)), 
+    #...And return the Data Frame
+    return_dataframe = F)
+
+FLK_om %>%
+  #Use Perform T Test Function...
+  NCRMP_perform_ttest( 
+    metric1 = 'old_mortality', 
+    metric2 = 'avMort', 
+    test_type = "Years",
+    alpha = 0.05,
+    #...where N Years = Number of unique years in Old Mortality Table...
+    n_years = length(unique(FLK_om$YEAR)), 
+    #...And return the Data Frame
+    return_dataframe = F)
+
+
+FLK_s %>%
+  #Use Perform T Test Function...
+  NCRMP_perform_ttest(
+    metric1 = 'colony_size',
+    metric2 = 'avCm3',
+    test_type = "Years",
+    alpha = 0.05,
+    #...where N Years = Number of unique years in Surface Area Table...
+    n_years = length(unique(FLK_s$YEAR)),
+    #...And return the Data Frame
+    return_dataframe = F)
+```
+
+# Bleaching plot
+
+```{r, warning=FALSE}
+# bleaching Prevalence Plot
+
+FLK_ble_prev %>% 
+  filter(YEAR == 2022) %>% 
+  ggplot(aes(x = reorder(species_name, avBlePrev), 
+             y = avBlePrev)) +
+  geom_bar(stat = "identity",
+           fill = "deepskyblue4") + 
+  geom_errorbar(data = FLK_ble_prev %>% 
+                  filter(YEAR == 2022), 
+                aes(x = reorder(species_name, avBlePrev), 
+                    ymin = avBlePrev, 
+                    ymax = avBlePrev+SE_B),
+                width = 0.1) +
+  coord_flip() + 
+  
+  guides(fill = "none") +
+  labs(y = "Bleaching Prevalence (%)", 
+       x = "", 
+       title = "Florida Keys") + 
+  scale_y_continuous(expand = c(0, 0), 
+                     #limits = c(0, 50)
+                     ) +
+  theme_Publication(base_size = 20) +
+  theme(axis.text.y = element_text(face = "italic"))  -> bp1
+
+#ggsave("FLK_ble_prev_withDRM.jpeg", 
+#       path = "K:/_BioGeoProjects/NCRMP/Data Analysis/Analysis ready data/Data Queries/CRCP Reports & Requests/NCRMP_tech_memo/Florida 2022/Figures_with_DRM_data",
+#       width = 10, 
+#       height = 10,
+#       dpi = 300)
+```
+
+# Disease plots
+
+```{r, warning=FALSE}
+# Disease Prevalence Plot
+
+FLK_dis_prev %>% 
+  filter(YEAR == 2022) %>% 
+  ggplot(aes(x = reorder(species_name, avDisPrev), 
+             y = avDisPrev)) +
+  geom_bar(stat = "identity",
+           fill = "deepskyblue4") + 
+  geom_errorbar(data = FLK_dis_prev %>% 
+                  filter(YEAR == 2022), 
+                aes(x = reorder(species_name, avDisPrev), 
+                    ymin = avDisPrev, 
+                    ymax = avDisPrev+SE_D),
+                width = 0.1) +
+  coord_flip() + 
+  
+  guides(fill = "none") +
+  labs(y = "Disease Prevalence (%)", 
+       x = "", 
+       title = "Florida Keys") + 
+  scale_y_continuous(expand = c(0, 0), 
+                     limits = c(0, 4.5)) +
+  theme_Publication(base_size = 20) +
+  theme(axis.text.y = element_text(face = "italic")) -> dp1
+
+#ggsave("FLK_dis_prev_withDRM.jpeg", 
+#       path = "K:/_BioGeoProjects/NCRMP/Data Analysis/Analysis ready data/Data Queries/CRCP Reports & Requests/NCRMP_tech_memo/Florida 2022/Figures_with_DRM_data",
+#       width = 10, 
+#       height = 10,
+#       dpi = 300)
+```
+
+
+###Facet bleaching and disease plot
+```{r}
+
+#figure out how many of each species there are, FLAG is this already a summary???
+  #load from the original unweighted files
+tmp <- load_NCRMP_DRM_demo_data(project = "NCRMP_DRM",
+                                  region = "FLK",
+                                  species_filter = "NULL")
+for(k in 1:length(tmp))assign(names(tmp)[k], tmp[[k]])
+
+#figure out the number of each coral species at sample year
+n <- bind_rows(dat_1stage %>%
+                 mutate(PRIMARY_SAMPLE_UNIT = as.factor(PRIMARY_SAMPLE_UNIT)), dat_2stage) %>% filter (YEAR == samp_year) %>%
+  group_by(SPECIES_CD) %>%
+  dplyr::mutate(n = sum(N)) %>%
+  dplyr::select(REGION, YEAR, SPECIES_CD, SPECIES_NAME, n) %>%
+  dplyr::distinct(SPECIES_CD, YEAR, SPECIES_NAME, n) %>%
+  dplyr::rename(species_name = SPECIES_NAME)
+   
+dis_ble_combined <- left_join(FLK_ble_prev, FLK_dis_prev) %>%
+    dplyr::filter(avBlePrev > 0 | avDisPrev > 0) %>%
+    filter(YEAR == max(YEAR)) %>%
+   left_join(., n) %>%
+   #making a column for naming g_mid
+   mutate(subnames = paste(species_name, " (", n, ")", sep="")) 
+
+
+# dis_ble_combined <- left_join(FLK_ble_prev, FLK_dis_prev) %>%
+#     dplyr::filter(avBlePrev > 0 | avDisPrev > 0) %>%
+#     filter(YEAR == max(YEAR))
+
+ptitle = "Florida Keys"
+    # plot
+ g_mid <-    ggplot(dis_ble_combined,
+           aes(x = 1,
+               y = reorder(species_name, avBlePrev)))+
+    geom_text(aes(label = subnames),
+              size = 3.75,
+              fontface = "italic") +
+    geom_segment(aes(x = 0.94,
+                     #xend = 0.965,
+                     xend = 0.96,
+                     yend = species_name))+
+    geom_segment(aes(#x = 1.035,
+                     x = 1.04,
+                     xend = 1.058,
+                     yend = species_name))+
+    ggtitle(paste(ptitle)) +
+    ylab(NULL) +
+    scale_x_continuous(expand = c(0,0),
+                       limits = c(0.94, 1.058))+
+    theme(axis.title = element_blank(),
+          panel.grid = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          panel.background = element_blank(),
+          axis.text.x = element_text(color = NA),
+          axis.ticks.x = element_line(color = NA),
+          plot.margin = unit(c(t = 1, r = -1, b = 1, l = -1), "mm"),
+          plot.title = element_text(face="bold", size=22, hjust = .55))
+
+ g_diseased <-  ggplot(dis_ble_combined,
+           aes(x = reorder(species_name, avBlePrev),
+               y = avDisPrev,
+               fill = 'even')) +
+    geom_bar(stat = "identity",
+             fill = "deepskyblue4") +
+  geom_errorbar(data = dis_ble_combined,
+                aes(x = reorder(species_name, avDisPrev), 
+                    ymin = avDisPrev, 
+                    ymax = avDisPrev+SE_D),
+                width = 0.1) +
+    ggtitle(paste("Disease Prevalence (%)", sep = " ")) +
+    theme_light() +
+    theme(axis.title.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          axis.text.x = element_text(size=12),
+          plot.margin = unit(c(t = 3, r=0, b = 1, l = 1), "mm"),
+          plot.title = element_text(hjust = 0.5,
+                                    size = 14,
+                                    face = "bold")) +
+    coord_flip() +
+    scale_y_reverse(expand = c(0.02,0)#, limits = c(60,0)
+                    ) +
+    guides(fill = "none")
+
+  g_bleached <- ggplot(dis_ble_combined,
+           aes(x = reorder(species_name, avBlePrev),
+               y = avBlePrev,
+               fill = 'even')) +
+    geom_bar(stat = "identity",
+             fill = "deepskyblue4") +
+  geom_errorbar(data = dis_ble_combined,
+                aes(x = reorder(species_name, avDisPrev), 
+                    ymin = avBlePrev, 
+                   ymax = avBlePrev+SE_B),
+               width = 0.1) +
+    ggtitle("Bleaching Prevalence (%)") +
+    theme_light() +
+    theme(axis.title.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.text.x = element_text(size=12),
+          axis.ticks.y = element_blank(),
+          plot.margin = unit(c(t = 3, r = 1, b = 1, l = -2), "mm"),
+          plot.title = element_text(hjust = 0.5,
+                                    size = 14,
+                                    face = "bold")) +
+    coord_flip() +
+    scale_y_continuous(expand = c(0.02,0) #, limits = c(0,60)
+                       ) +
+    guides(fill = "none")
+ 
+##combine all graphs###
+   cowplot::plot_grid(g_diseased,
+                     g_mid,
+                     g_bleached,
+                     ncol = 3)
+   
+   
+    ggsave(filename = paste("FLK.plot.disease.bleaching.prevalence_withDRM.jpeg"),
+         path = "K:/_BioGeoProjects/NCRMP/Data Analysis/Analysis ready data/Data Queries/CRCP Reports & Requests/NCRMP_tech_memo/Florida 2022/Figures_with_DRM_data",
+     #    plot = gridExtra::grid.arrange(g1, g.mid, g2,
+     #                                   ncol = 3,
+      #                                  widths = c(3.5/9,2/9,3.5/9)),
+         width = 10,
+         height = 7,
+         dpi = 300,
+         units = "in",
+         device = "jpg")
+  
+
+```
+
+
+# Species density plots
+
+```{r species density,  message==FALSE}
+# density by species for each region
+reg_means_plot <-  FLK_weightedmeans %>% 
+  mutate(REGION = "Florida Keys") %>% 
+  # exclude occurrences of 0
+  dplyr::filter(CV < 1)  %>% 
+  ggplot(aes(x = avDen, y = reorder(SPECIES_CD, avDen))) +    
+  geom_point(stat = "identity", size = 3.75) + 
+  theme_light() +
+  labs(x = expression(Density~(corals/m^{2})),
+       y = "",
+       title = "Florida Keys") +
+  
+  theme_Publication(base_size = 20) +
+  theme(axis.text.y = element_text(face = "italic"))
+
+ggsave("FLK_den_spp_withDRM.jpeg", 
+       path = "K:/_BioGeoProjects/NCRMP/Data Analysis/Analysis ready data/Data Queries/CRCP Reports & Requests/NCRMP_tech_memo/Florida 2022/Figures_with_DRM_data",
+       width = 10, 
+       height = 10,
+       dpi = 300)
+
+
+
+
+```
+
+
+
+```{r species density mortality and size,  message==FALSE}
+
+# combine density, mortality, and size data
+a <- FLK_weightedmeans %>% dplyr::select(REGION, YEAR, SPECIES_CD, avDen, CV, SE) %>% 
+  dplyr::rename("SE_avDen" = SE)
+b <- FLK_om_spp %>% dplyr::mutate(SPECIES_CD = SPECIES_NAME) %>% dplyr::select(REGION, YEAR, SPECIES_CD, avMort, SE) %>% 
+  dplyr::rename("avMortOld" = avMort,
+                "SE_avMortOld" = SE)
+c <- FLK_s_spp %>% dplyr::mutate(SPECIES_CD = SPECIES_NAME) %>% dplyr::select(REGION, YEAR, SPECIES_CD, avMaxdiam, SE_maxdiam)
+d <- FLK_rm_spp %>% dplyr::mutate(SPECIES_CD = SPECIES_NAME) %>% dplyr::select(REGION, YEAR, SPECIES_CD, avMort, SE) %>% 
+  dplyr::rename("avMortRec" = avMort,
+                "SE_avMortRec" = SE)
+ 
+# combine density, mortality, and size data 
+newdat <- a %>% 
+  dplyr::left_join(., b) %>% 
+  dplyr::left_join(., c) %>% 
+  dplyr::left_join(., d) %>% 
+  dplyr::filter(CV < 1) %>% 
+  dplyr::mutate(REGION = "Florida Keys")
+
+
+#### Species on y, measurements on x
+
+# set species breaks/levels
+spp_levels <- newdat %>% dplyr::arrange(avDen) 
+spp_levels <- spp_levels$SPECIES_CD
+
+newdat <- newdat %>% dplyr::mutate(SPECIES_CD = factor(SPECIES_CD, levels = spp_levels))
+
+# density by species for each region
+dens_plot <-  newdat %>% 
+  ggplot(aes(x = avDen, y = SPECIES_CD)) + 
+  geom_point(stat = "identity", size = 3.75) + 
+  geom_errorbar(aes(xmin = avDen-SE_avDen, xmax = avDen+SE_avDen, y = SPECIES_CD), width = 0, color = "black") +
+  theme_light() +
+  labs(x = expression(Density~(corals/m^{2})),
+       y = "") +
+  theme_Publication(base_size = 20) +
+  theme(axis.text.y = element_text(face = "italic"))
+
+
+om_plot <-  newdat %>% 
+  ggplot(aes(x = avMortOld, y = SPECIES_CD)) +    
+  geom_errorbar(aes(xmin = avMortOld-SE_avMortOld, xmax = avMortOld+SE_avMortOld, y = SPECIES_CD), width = 0, color = "black") +
+  geom_point(stat = "identity", size = 3.75) + 
+  theme_light() +
+  labs(x = expression(Old~mortality~("%")),
+       y = "") +
+  theme_Publication(base_size = 20) +
+  theme(axis.text.y = element_blank(),
+        axis.title.y = element_blank())
+
+rm_plot <-  newdat %>% 
+  ggplot(aes(x = avMortRec, y = SPECIES_CD)) +  
+  geom_errorbar(aes(xmin = avMortRec-SE_avMortRec, xmax = avMortRec+SE_avMortRec, y = SPECIES_CD), width = 0, color = "black") +
+  geom_point(stat = "identity", size = 3.75) + 
+  theme_light() +
+  labs(x = expression(Recent~mortality~("%")),
+       y = "") +
+  theme_Publication(base_size = 20) +
+  theme(axis.text.y = element_blank(),
+        axis.title.y = element_blank())
+
+
+size_plot <-  newdat %>% 
+  ggplot(aes(x = avMaxdiam, y = SPECIES_CD)) +   
+  geom_errorbar(aes(xmin = avMaxdiam-SE_maxdiam, xmax = avMaxdiam+SE_maxdiam, y = SPECIES_CD), width = 0, color = "black") +
+  geom_point(stat = "identity", size = 3.75) + 
+  theme_light() +
+  labs(x = expression(Maximum~diameter~(cm)),
+       y = "") +
+  theme_Publication(base_size = 20) +
+  theme(axis.text.y = element_blank(),
+        axis.title.y = element_blank())
+
+
+plot_spp_demo <- egg::ggarrange(dens_plot, 
+                                size_plot,
+                                om_plot, 
+                                rm_plot,
+                                nrow = 1,
+                                top = text_grob("Florida Keys", 
+                face = "bold", size = 24, hjust = -0.25)) 
+
+
+ggsave("FLK_den_mort_size_spp_withDRM.jpeg", 
+       plot = plot_spp_demo,
+       path = "K:/_BioGeoProjects/NCRMP/Data Analysis/Analysis ready data/Data Queries/CRCP Reports & Requests/NCRMP_tech_memo/Florida 2022/Figures_with_DRM_data",
+       width = 18, 
+       height = 12.5,
+       dpi = 300)
+
+
+
+
+
+
+
+#### Species on x, measurements on y
+
+# set species breaks/levels
+spp_levels <- newdat %>% dplyr::arrange(desc(avDen))
+spp_levels <- spp_levels$SPECIES_CD
+
+newdat <- newdat %>% dplyr::mutate(SPECIES_CD = factor(SPECIES_CD, levels = spp_levels))
+
+# density by species for each region
+dens_plot <-  newdat %>% 
+  ggplot(aes(x = SPECIES_CD, y = avDen)) +    
+  geom_errorbar(aes(ymin = avDen-SE_avDen, ymax = avDen+SE_avDen, x = SPECIES_CD), width = 0, color = "black") +
+  geom_point(stat = "identity", size = 3.75) + 
+  theme_light() +
+  labs(y = expression(Density~(corals/m^{2})),
+       x = "",
+       title = "Florida Keys") +
+  theme_Publication(base_size = 20) +
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank())
+
+
+om_plot <-  newdat %>% 
+  ggplot(aes(x = SPECIES_CD, y = avMortOld)) +    
+  geom_errorbar(aes(ymin = avMortOld-SE_avMortOld, ymax = avMortOld+SE_avMortOld, x = SPECIES_CD), width = 0, color = "black") +
+  geom_point(stat = "identity", size = 3.75) + 
+  theme_light() +
+  labs(y = expression(Old~mortality~("%")),
+       x = "") +
+  theme_Publication(base_size = 20) +
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank())
+
+rm_plot <-  newdat %>% 
+  ggplot(aes(x = SPECIES_CD, y = avMortRec)) +    
+  geom_errorbar(aes(ymin = avMortRec-SE_avMortRec, ymax = avMortRec+SE_avMortRec, x = SPECIES_CD), width = 0, color = "black") +
+  geom_point(stat = "identity", size = 3.75) + 
+  theme_light() +
+  labs(y = expression(Recent~mortality~("%")),
+       x = "") +
+  theme_Publication(base_size = 20) +
+  theme(axis.text.x = element_text(face = "italic", angle = 90, hjust = 1, vjust = 0.35),
+        axis.title.x = element_blank())
+
+
+size_plot <-  newdat %>% 
+  ggplot(aes(x = SPECIES_CD, y = avMaxdiam)) +    
+  geom_errorbar(aes(ymin = avMaxdiam-SE_maxdiam, ymax = avMaxdiam+SE_maxdiam, x = SPECIES_CD), width = 0, color = "black") +
+  geom_point(stat = "identity", size = 3.75) + 
+  theme_light() +
+  labs(y = expression(Maximum~diameter~(cm)),
+       x = "") +
+  theme_Publication(base_size = 20) +
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank())
+
+
+#titletext <- expression(bold(paste("Florida Keys")))
+
+
+plot_spp_demo <- egg::ggarrange(dens_plot, 
+                                size_plot,
+                                om_plot, 
+                                rm_plot,
+                                nrow = 4) 
+
+
+ggsave("FLK_den_mort_size_spp_withDRM_flip.jpeg", 
+       plot = plot_spp_demo,
+       path = "K:/_BioGeoProjects/NCRMP/Data Analysis/Analysis ready data/Data Queries/CRCP Reports & Requests/NCRMP_tech_memo/Florida 2022/Figures_with_DRM_data",
+       width = 10, 
+       height = 17,
+       dpi = 300)
+```
+
+# Length comparison plots
+
+## Run with all species to see all plots
+
+```{r}
+
+analyzed_species <- c(
+  "ACR CERV", #A. cervicornis
+  "ACR PALM", #A. palmata
+  "ORB ANNU", #O. annularis
+  "ORB FRAN", #O. franksi
+  "ORB FAVE", #O. faveolata
+  "MEA MEAN", #M. meandrites
+  "DEN CYLI", #D. cylindrus
+  "PSE STRI", #A. cervicornis
+  "DIP LABI", #D. labyrinthiformis
+  "COL NATA", #C. natans
+  "SID SIDE", #S. siderea
+  "POR ASTE", #P. astreoides
+  "MON CAVE", #M. cavernosa
+  "AGA AGAR", #A. agaricites
+  "STE INTE" #S. inercepta
+)
+
+
+tmp <- NCRMP_make_size_bins(region = "FLK",
+                            project = "NCRMP_DRM",
+                            years = c(2014, 2022),
+                            species_filter = analyzed_species)
+
+
+```
+
+```{r, include = FALSE}
+#Create Plot
+#x = make_size_bin list
+#y = size or length
+
+make_size_plot <- function(x, y = "length") {
+  
+  if (y == "size") {
+    domain_estimates = x$size_domain_est
+    demos = x$size_3d_demos
+    name = "Binned Surface Area in"~cm^3
+  }
+  
+  if (y == "length") {
+    domain_estimates = x$length_domain_est
+    demos = x$length_demos
+    name = "Length (cm)"
+  }
+  
+  uniq_s <- unique(domain_estimates$SPECIES_CD) 
+  
+  for (i in uniq_s) {
+    
+    domain_sub = subset(domain_estimates, SPECIES_CD == i)
+    demos_sub = subset(demos, SPECIES_CD == i)
+    n_bins = max(demos_sub$n_bins)
+    text_size = 11
+    angle = dplyr::if_else(n_bins > 6 | y == "size", 45, 0)
+    hjust = dplyr::if_else(angle == 45, 1, 0.5)
+    min = min(demos_sub$min)
+    bin_width = min(demos_sub$bin_width)
+    small = dplyr::if_else(n_bins > 4, 0, 1)
+    
+    num_vec = seq_len(max(domain_sub$bin_num))
+    
+    x$bin_low = dplyr::if_else(x$bin_num == 1, 4, round(x$min + (x$bin_width * (x$bin_num-1))+2,2))
+    
+    x$bin_high = round(x$bin_width +x$min + (x$bin_width * (x$bin_num-1))+1,2)
+    
+    lab_vec = paste(x$bin_low, x$bin_high, sep = "-")
+    
+    lab_vec = paste(
+      format(
+        x = dplyr::if_else(num_vec == 1, 4, round(min + (bin_width * (num_vec-1))+2,small)),
+        nsmall = small
+      ),
+      #"-",
+      format(
+        x = round(bin_width + min + (bin_width * (num_vec-1))+1,small),
+        nsmall = small
+      ),
+      sep = "-"
+    )
+    
+    
+    
+    print(
+      ggplot(data = domain_sub, aes(x = as.integer(bin_num), y = avtally, 
+                                    fill = YEAR)) +
+        geom_bar(stat="identity", position = "dodge2", width = .9, color="black", size=.5) +
+        theme_Publication(base_size = 20) +
+        #    facet_wrap(~facet_label, nrow=4, scales = "free") +
+        labs(
+          y = "Frequency") +
+        scale_x_continuous(name = name, 
+                           breaks = seq_along(lab_vec),
+                           labels = lab_vec) +
+        ggtitle(unique(domain_sub$SPECIES_NAME)) +
+        theme(axis.text.x = element_text(size = text_size, angle = angle, 
+                                         hjust = hjust),
+              legend.key = element_rect(colour = NA),
+              legend.position = "bottom",
+              legend.direction = "horizontal",
+              legend.key.size= unit(0.5, "cm"),
+              legend.margin = margin(0,0,0,0, "cm")
+              #,
+              #legend.title = element_text(face="italic")
+        ) +
+        scale_fill_manual(values=c('springgreen3','deepskyblue4'))
+    )
+    
+  } 
+}
+
+```
+
+```{r}
+
+make_size_plot(tmp, "length")
+
+
+```
+
+## Run again with only species of interest to make grided plots
+
+```{r}
+
+analyzed_species <- c(
+  #"ACR CERV", #A. cervicornis
+  #"ACR PALM", #A. palmata
+  #"ORB ANNU", #O. annularis
+  #"ORB FRAN", #O. franksi
+  "ORB FAVE", #O. faveolata
+  "MEA MEAN", #M. meandrites
+  #"DEN CYLI", #D. cylindrus
+  #"PSE STRI", #A. cervicornis
+  #"DIP LABI", #D. labyrinthiformis
+  "COL NATA", #C. natans
+  #"SID SIDE", #S. siderea
+  #"POR ASTE", #P. astreoides
+  "MON CAVE"   #M. cavernosa
+  #"AGA AGAR", #A. agaricites
+  #"STE INTE" #S. inercepta
+)
+
+
+tmp <- NCRMP_make_size_bins(region = "FLK",
+                            project = "NCRMP_DRM",
+                            years = c(2014, 2018, 2022),
+                            species_filter = analyzed_species)
+
+
+```
+
+### Species 1
+
+```{r, include = FALSE}
+#Create Plot
+#x = make_size_bin list
+#y = size or length
+
+spp1 <- "COL NATA" # Go in alphabetical order
+
+# Surface area
+# domain_estimates = tmp$size_domain_est
+# demos = tmp$size_3d_demos
+# name = "Binned Surface Area in"~cm^3
+
+
+# Length
+domain_estimates = tmp$length_domain_est
+mort_domain = tmp$domain_mort_spp
+demos = tmp$length_demos
+name = "Length (cm)"
+y = "length"
+
+
+
+domain_sub = subset(domain_estimates, SPECIES_CD == spp1)
+demos_sub = subset(demos, SPECIES_CD == spp1) 
+mort_sub = mort_domain %>% dplyr::filter(SPECIES_CD == spp1)
+
+# Drop unseen factors levels for year - expanding below makes the unused year levels reapear
+domain_sub$YEAR <- droplevels(domain_sub$YEAR)
+
+domain_sub <-  domain_sub %>%
+  # add 0s in for species not observed
+  tidyr::expand(., REGION, SPECIES_NAME, SPECIES_CD, YEAR, bin_num) %>%
+  # connect back to demo_data to fill in with NAs
+  dplyr::full_join(., domain_sub,
+                   by = c('REGION', 'SPECIES_NAME',"SPECIES_CD", "YEAR", "bin_num")) %>%
+  # join with mortality data
+  dplyr::full_join(., mort_sub)
+  # make a presence/absence column
+  dplyr::mutate(avtally = ifelse(is.na(avtally), 0, avtally),
+                bin_name = dplyr::case_when(bin_num == 4 ~ "66-85",
+                                            bin_num == 5 ~ "86-105",
+                                            bin_num == 6 ~ "106-125",
+                                            bin_num == 7 ~ "126-145",
+                                            bin_num == 9 ~ "166-185",
+                                            bin_num == 10 ~ "186-205",
+                                            bin_num == 12 ~ "226-245",
+                                            bin_num == 13 ~ "246-265",TRUE ~ as.character(bin_name)))
+
+
+n_bins = max(demos_sub$n_bins)
+text_size = 11
+#angle = dplyr::if_else(n_bins > 6 | y == "size", 45, 0)
+angle = 45
+hjust = dplyr::if_else(angle == 45, 1, 0.5)
+min = min(demos_sub$min)
+bin_width = min(demos_sub$bin_width)
+small = dplyr::if_else(n_bins > 4, 0, 1)
+
+num_vec = seq_len(max(domain_sub$bin_num))
+
+lab_vec = paste(
+  format(
+    x = dplyr::if_else(num_vec == 1, 4, round(min + (bin_width * (num_vec-1))+2,small)),
+    nsmall = small
+  ),
+  #"-",
+  format(
+    x = round(bin_width + min + (bin_width * (num_vec-1))+1,small),
+    nsmall = small
+  ),
+  sep = "-"
+)
+
+
+
+
+p1 <- ggplot(data = domain_sub, 
+             aes(x = as.integer(bin_num),
+                 y = avtally, fill = YEAR)) +
+  
+  geom_bar(stat="identity", position = "dodge2", width = .9, color="black", size=.5) +
+  
+  theme_Publication(base_size = 20) +
+  
+  facet_wrap(~SPECIES_NAME) +
+  
+  labs( y = "Frequency", x = "") +
+  
+  scale_x_continuous(#name = name, 
+    breaks = seq_along(lab_vec),
+    labels = lab_vec) +
+  scale_y_continuous(expand = c(0, 0), 
+                     limits = c(0, 2)) +
+  
+  #ggtitle(unique(domain_sub$SPECIES_NAME)) +
+  
+  ggtitle("Florida Keys") +
+  
+  theme(axis.text.x = element_text(size = text_size, angle = angle, 
+                                   hjust = hjust),
+        #legend.key = element_rect(colour = NA),
+        legend.position = "none",
+        # legend.direction = "horizontal",
+        # legend.key.size= unit(0.5, "cm"),
+        # legend.margin = margin(0,0,0,0, "cm")
+        plot.margin = unit(c(t = 1, r = 1, b = -2, l = 2),"mm"),
+        strip.text = element_text(face = "italic")) +
+  
+  scale_fill_manual(values=c('springgreen3','deepskyblue4'))
+
+
+p1   
+
+```
+
+### Species 2
+
+```{r, include = FALSE}
+#Create Plot
+#x = make_size_bin list
+#y = size or length
+
+spp2 <- "MEA MEAN" # Go in alphabetical order
+
+# Surface area
+# domain_estimates = tmp$size_domain_est
+# demos = tmp$size_3d_demos
+# name = "Binned Surface Area in"~cm^3
+
+
+# Length
+domain_estimates = tmp$length_domain_est
+demos = tmp$length_demos
+name = "Length (cm)"
+
+
+domain_sub = subset(domain_estimates, SPECIES_CD == spp2)
+demos_sub = subset(demos, SPECIES_CD == spp2)
+
+# Drop unseen factors levels for year - expanding below makes the unused year levels reapear
+domain_sub$YEAR <- droplevels(domain_sub$YEAR)
+
+domain_sub <-  domain_sub %>%
+  # add 0s in for species not observed
+  tidyr::expand(., REGION, SPECIES_NAME, SPECIES_CD, YEAR, bin_num) %>%
+  # connect back to demo_data to fill in with NAs
+  dplyr::full_join(., domain_sub,
+                   by = c('REGION', 'SPECIES_NAME',"SPECIES_CD", "YEAR", "bin_num")) %>%
+  # make a presence/absence column
+  dplyr::mutate(avtally = ifelse(is.na(avtally), 0, avtally),
+                bin_name = dplyr::case_when(bin_num == 2 ~ "26-45",
+                                            bin_num == 3 ~ "46-65",
+                                            bin_num == 4 ~ "66-85",
+                                            bin_num == 5 ~ "86-105",
+                                            bin_num == 8 ~ "146-165",TRUE ~ as.character(bin_name)))
+
+
+
+n_bins = max(demos_sub$n_bins)
+text_size = 11
+angle = dplyr::if_else(n_bins > 6 | y == "size", 45, 0)
+hjust = dplyr::if_else(angle == 45, 1, 0.5)
+min = min(demos_sub$min)
+bin_width = min(demos_sub$bin_width)
+small = dplyr::if_else(n_bins > 4, 0, 1)
+
+num_vec = seq_len(max(domain_sub$bin_num))
+
+lab_vec = paste(
+  format(
+    x = dplyr::if_else(num_vec == 1, 4, round(min + (bin_width * (num_vec-1))+2,small)),
+    nsmall = small
+  ),
+  #"-",
+  format(
+    x = round(bin_width + min + (bin_width * (num_vec-1))+1,small),
+    nsmall = small
+  ),
+  sep = "-"
+)
+
+
+
+
+p2 <- ggplot(data = domain_sub, 
+             aes(x = as.integer(bin_num),
+                 y = avtally, fill = YEAR)) +
+  
+  geom_bar(stat="identity", position = "dodge2", width = .9, color="black", size=.5) +
+  
+  theme_Publication(base_size = 20) +
+  
+  facet_wrap(~SPECIES_NAME) +
+  
+  labs( y = "", x = "") +
+  
+  scale_x_continuous(#name = name, 
+    breaks = seq_along(lab_vec),
+    labels = lab_vec) +
+  scale_y_continuous(expand = c(0, 0), 
+                     limits = c(0, 1.2)) +
+  
+  #ggtitle(unique(domain_sub$SPECIES_NAME)) +
+  
+  #ggtitle("Dry Tortugas") +
+  
+  theme(axis.text.x = element_text(size = text_size, angle = angle, 
+                                   hjust = hjust),
+        #legend.key = element_rect(colour = NA),
+        legend.position = "none",
+        # legend.direction = "horizontal",
+        # legend.key.size= unit(0.5, "cm"),
+        # legend.margin = margin(0,0,0,0, "cm")
+        plot.margin = unit(c(t = 1, r = 2, b = -2, l = 0),"mm"),
+        strip.text = element_text(face = "italic")) +
+  
+  scale_fill_manual(values=c('springgreen3','deepskyblue4'))
+
+#p1   
+p2   
+
+```
+
+### Species 3
+
+```{r, include = FALSE}
+#Create Plot
+#x = make_size_bin list
+#y = size or length
+
+spp3 <- "MON CAVE" # Go in alphabetical order
+
+# Surface area
+# domain_estimates = tmp$size_domain_est
+# demos = tmp$size_3d_demos
+# name = "Binned Surface Area in"~cm^3
+
+
+# Length
+domain_estimates = tmp$length_domain_est
+demos = tmp$length_demos
+name = "Length (cm)"
+
+
+domain_sub = subset(domain_estimates, SPECIES_CD == spp3)
+demos_sub = subset(demos, SPECIES_CD == spp3)
+
+# Drop unseen factors levels for year - expanding below makes the unused year levels reapear
+domain_sub$YEAR <- droplevels(domain_sub$YEAR)
+
+domain_sub <-  domain_sub %>%
+  # add 0s in for species not observed
+  tidyr::expand(., REGION, SPECIES_NAME, SPECIES_CD, YEAR, bin_num) %>%
+  # connect back to demo_data to fill in with NAs
+  dplyr::full_join(., domain_sub,
+                   by = c('REGION', 'SPECIES_NAME',"SPECIES_CD", "YEAR", "bin_num")) %>%
+  # make a presence/absence column
+  dplyr::mutate(avtally = ifelse(is.na(avtally), 0, avtally),
+                bin_name = dplyr::case_when(bin_num == 6 ~ "106-125",
+                                            bin_num == 7 ~ "126-145",
+                                            bin_num == 9 ~ "166-185",
+                                            bin_num == 10 ~ "186-205",TRUE ~ as.character(bin_name)))
+
+
+
+n_bins = max(demos_sub$n_bins)
+text_size = 11
+#angle = dplyr::if_else(n_bins > 6 | y == "size", 45, 0)
+angle = 45
+hjust = dplyr::if_else(angle == 45, 1, 0.5)
+min = min(demos_sub$min)
+bin_width = min(demos_sub$bin_width)
+small = dplyr::if_else(n_bins > 4, 0, 1)
+
+num_vec = seq_len(max(domain_sub$bin_num))
+
+lab_vec = paste(
+  format(
+    x = dplyr::if_else(num_vec == 1, 4, round(min + (bin_width * (num_vec-1))+2,small)),
+    nsmall = small
+  ),
+  #"-",
+  format(
+    x = round(bin_width + min + (bin_width * (num_vec-1))+1,small),
+    nsmall = small
+  ),
+  sep = "-"
+)
+
+
+
+
+p3 <- ggplot(data = domain_sub, 
+             aes(x = as.integer(bin_num),
+                 y = avtally, fill = YEAR)) +
+  
+  geom_bar(stat="identity", position = "dodge2", width = .9, color="black", size=.5) +
+  
+  theme_Publication(base_size = 20) +
+  
+  facet_wrap(~SPECIES_NAME) +
+  
+  labs( y = "Frequency", x = "") +
+  
+  scale_x_continuous(name = name, 
+                     breaks = seq_along(lab_vec),
+                     labels = lab_vec) +
+  scale_y_continuous(expand = c(0, 0), 
+                     limits = c(0, 2.5)) +
+  
+  #ggtitle(unique(domain_sub$SPECIES_NAME)) +
+  
+  #ggtitle("Dry Tortugas") +
+  
+  theme(axis.text.x = element_text(size = text_size, angle = angle, 
+                                   hjust = hjust),
+        #legend.key = element_rect(colour = NA),
+        legend.position = "none",
+        # legend.direction = "horizontal",
+        # legend.key.size= unit(0.5, "cm"),
+        # legend.margin = margin(0,0,0,0, "cm")
+        plot.margin = unit(c(t = -2, r = 1, b = 2, l = 2),"mm"),
+        strip.text = element_text(face = "italic")) +
+  scale_fill_manual(values=c('springgreen3','deepskyblue4'))
+
+#p1   
+p3   
+
+```
+
+### Species 4
+
+```{r, include = FALSE}
+#Create Plot
+#x = make_size_bin list
+#y = size or length
+
+spp4 <- "ORB FAVE" # Go in alphabetical order
+
+# Surface area
+# domain_estimates = tmp$size_domain_est
+# demos = tmp$size_3d_demos
+# name = "Binned Surface Area in"~cm^3
+
+
+# Length
+domain_estimates = tmp$length_domain_est
+demos = tmp$length_demos
+name = "Length (cm)"
+
+
+domain_sub = subset(domain_estimates, SPECIES_CD == spp4)
+demos_sub = subset(demos, SPECIES_CD == spp4)
+
+# Drop unseen factors levels for year - expanding below makes the unused year levels reappear
+domain_sub$YEAR <- droplevels(domain_sub$YEAR)
+
+domain_sub <-  domain_sub %>%
+  # add 0s in for species not observed
+  tidyr::expand(., REGION, SPECIES_NAME, SPECIES_CD, YEAR, bin_num) %>%
+  # connect back to demo_data to fill in with NAs
+  dplyr::full_join(., domain_sub,
+                   by = c('REGION', 'SPECIES_NAME',"SPECIES_CD", "YEAR", "bin_num")) %>%
+  # make a presence/absence column
+  dplyr::mutate(avtally = ifelse(is.na(avtally), 0, avtally),
+                bin_name = dplyr::case_when(bin_num == 8 ~ "146-165",
+                                            bin_num == 11 ~ "206-225",
+                                            bin_num == 12 ~ "226-245",
+                                            bin_num == 13 ~ "246-265",
+                                            bin_num == 14 ~ "266-285",
+                                            bin_num == 15 ~ "286-305",
+                                            bin_num == 17 ~ "326-345",TRUE ~ as.character(bin_name)))
+
+
+n_bins = max(demos_sub$n_bins)
+text_size = 11
+angle = dplyr::if_else(n_bins > 6 | y == "size", 45, 0)
+hjust = dplyr::if_else(angle == 45, 1, 0.5)
+min = min(demos_sub$min)
+bin_width = min(demos_sub$bin_width)
+small = dplyr::if_else(n_bins > 4, 0, 1)
+
+num_vec = seq_len(max(domain_sub$bin_num))
+
+lab_vec = paste(
+  format(
+    x = dplyr::if_else(num_vec == 1, 4, round(min + (bin_width * (num_vec-1))+2,small)),
+    nsmall = small
+  ),
+  #"-",
+  format(
+    x = round(bin_width + min + (bin_width * (num_vec-1))+1,small),
+    nsmall = small
+  ),
+  sep = "-"
+)
+
+
+
+
+p4 <- ggplot(data = domain_sub, 
+             aes(x = as.integer(bin_num),
+                 y = avtally, fill = YEAR)) +
+  
+  geom_bar(stat="identity", position = "dodge2", width = .9, color="black", size=.5) +
+  
+  theme_Publication(base_size = 20) +
+  
+  facet_wrap(~SPECIES_NAME) +
+  
+  labs( y = "", x = "") +
+  
+  scale_x_continuous(name = name, 
+                     breaks = seq_along(lab_vec),
+                     labels = lab_vec) +
+  scale_y_continuous(expand = c(0, 0), 
+                     limits = c(0, 1.5)) +
+  
+  #ggtitle(unique(domain_sub$SPECIES_NAME)) +
+  
+  #ggtitle("Dry Tortugas") +
+  
+  theme(axis.text.x = element_text(size = text_size, angle = angle, 
+                                   hjust = hjust),
+        legend.key = element_rect(colour = NA),
+        legend.position = "bottom",
+        legend.direction = "horizontal",
+        legend.key.size= unit(0.5, "cm"),
+        legend.margin = margin(0,0,0,0, "cm"),
+        plot.margin = unit(c(t = -2, r = 1, b = 2, l = 2),"mm"),
+        strip.text = element_text(face = "italic")) +
+  scale_fill_manual(values=c('springgreen3','deepskyblue4'))
+
+#p1   
+p4   
+
+```
+
+## Combine and export plots
+
+```{r}
+
+#plot_grid(p1, p2, p3, p4, ncol = 2) 
+
+ggarrange(p1, p2, p3, p4, ncol=2, nrow=2, common.legend = TRUE, legend="bottom", align = "hv")
+#ggarrange(p1, p2, p3, p4, ncol=1, nrow=4, common.legend = TRUE, legend="bottom", align = "hv")
+
+ggsave("FLK.size.compare_withDRM.jpeg", 
+       path = "K:/_BioGeoProjects/NCRMP/Data Analysis/Analysis ready data/Data Queries/CRCP Reports & Requests/NCRMP_tech_memo/Florida 2022/Figures_with_DRM_data",
+       width = 12, 
+       height = 12,
+       dpi = 300)
+
+
+
+```
+
+
+
+# RELATIVE length comparison plots   
+
+## Run with all species to see all plots  
+
+```{r}
+
+analyzed_species <- c(
+  "ACR CERV", #A. cervicornis
+  "ACR PALM", #A. palmata
+  "ORB ANNU", #O. annularis
+  "ORB FRAN", #O. franksi
+  "ORB FAVE", #O. faveolata
+  "MEA MEAN", #M. meandrites
+  "DEN CYLI", #D. cylindrus
+  "PSE STRI", #A. cervicornis
+  "DIP LABI", #D. labyrinthiformis
+  "COL NATA", #C. natans
+  "SID SIDE", #S. siderea
+  "POR ASTE", #P. astreoides
+  "MON CAVE", #M. cavernosa
+  "AGA AGAR", #A. agaricites
+  "STE INTE" #S. inercepta
+)
+
+
+tmp <- NCRMP_make_size_bins(region = "FLK",
+                            project = "NCRMP_DRM",
+                            years = c(2014, 2022),
+                            species_filter = analyzed_species)
+
+
+```
+
+
+```{r, include = FALSE}
+#Create Plot
+#x = make_size_bin list
+#y = size or length
+
+make_size_plot <- function(x, y = "length") {
+  
+  if (y == "size") {
+    domain_estimates = x$size_domain_est
+    demos = x$size_3d_demos
+    name = "Binned Surface Area in"~cm^3
+  }
+  
+  if (y == "length") {
+    domain_estimates = x$length_freq_domain_est
+    demos = x$length_demos
+    name = "Length (cm)"
+  }
+  
+  uniq_s <- unique(domain_estimates$SPECIES_CD) 
+  
+  for (i in uniq_s) {
+    
+    domain_sub = subset(domain_estimates, SPECIES_CD == i)
+    demos_sub = subset(demos, SPECIES_CD == i)
+    n_bins = max(demos_sub$n_bins)
+    text_size = 11
+    angle = dplyr::if_else(n_bins > 6 | y == "size", 45, 0)
+    hjust = dplyr::if_else(angle == 45, 1, 0.5)
+    min = min(demos_sub$min)
+    bin_width = min(demos_sub$bin_width)
+    small = dplyr::if_else(n_bins > 4, 0, 1)
+    
+    num_vec = seq_len(max(domain_sub$bin_num))
+    
+    x$bin_low = dplyr::if_else(x$bin_num == 1, 4, round(x$min + (x$bin_width * (x$bin_num-1))+2,2))
+    
+    x$bin_high = round(x$bin_width +x$min + (x$bin_width * (x$bin_num-1))+1,2)
+    
+    lab_vec = paste(x$bin_low, x$bin_high, sep = "-")
+    
+    lab_vec = paste(
+      format(
+        x = dplyr::if_else(num_vec == 1, 4, round(min + (bin_width * (num_vec-1))+2,small)),
+        nsmall = small
+      ),
+      #"-",
+      format(
+        x = round(bin_width + min + (bin_width * (num_vec-1))+1,small),
+        nsmall = small
+      ),
+      sep = "-"
+    )
+    
+    
+    
+    print(
+      ggplot(data = domain_sub, aes(x = as.integer(bin_num), y = length_freq_domain, 
+                                    fill = YEAR)) +
+        geom_bar(stat="identity", position = "dodge2", width = .9, color="black", size=.5) +
+        theme_Publication(base_size = 20) +
+        #    facet_wrap(~facet_label, nrow=4, scales = "free") +
+        labs(
+          y = "Frequency") +
+        scale_x_continuous(name = name, 
+                           breaks = seq_along(lab_vec),
+                           labels = lab_vec) +
+        ggtitle(unique(domain_sub$SPECIES_NAME)) +
+        theme(axis.text.x = element_text(size = text_size, angle = angle, 
+                                         hjust = hjust),
+              legend.key = element_rect(colour = NA),
+              legend.position = "bottom",
+              legend.direction = "horizontal",
+              legend.key.size= unit(0.5, "cm"),
+              legend.margin = margin(0,0,0,0, "cm")
+              #,
+              #legend.title = element_text(face="italic")
+        ) +
+        scale_fill_manual(values=c('springgreen3','gold1'))
+    )
+    #ggsave(paste("FLK_den_spp_", i, "_NEW.jpeg", sep = ""),
+    #   path = "H:/Projects/NCRMP/Data Queries/NCRMP_FL2020_TechMemo/FLK",
+    #   width = 10, 
+    #   height = 10,
+    #   dpi = 300)
+    
+  } 
+}
+
+```
+
+```{r}
+
+make_size_plot(tmp, "length")
+
+
+```
+
+
+
+# Run again with only species of interest to make grided plots
+
+```{r}
+
+analyzed_species <- c(
+  "ACR CERV", #A. cervicornis
+  #"ACR PALM", #A. palmata
+  #"ORB ANNU", #O. annularis
+  #"ORB FRAN", #O. franksi
+  #"ORB FAVE", #O. faveolata
+  "MEA MEAN", #M. meandrites
+  #"DEN CYLI", #D. cylindrus
+  #"PSE STRI", #A. cervicornis
+  #"DIP LABI", #D. labyrinthiformis
+  "COL NATA", #C. natans
+  #"SID SIDE", #S. siderea
+  #"POR ASTE", #P. astreoides
+  "MON CAVE"   #M. cavernosa
+  #"AGA AGAR", #A. agaricites
+  #"STE INTE" #S. inercepta
+)
+
+
+# tmp2 <- NCRMP_make_size_bins(region = "FLK",
+#                             project = "NCRMP_DRM",
+#                             years = c(2014, 2022),
+#                             species_filter = analyzed_species)
+
+tmp <- NCRMP_make_size_bins(region = "FLK",
+                            project = "NCRMP_DRM",
+                            years = c(2014, 2018, 2022),
+                            species_filter = analyzed_species)
+
+
+```
+
+### Species 1  
+```{r, include = FALSE}
+#Create Plot
+#x = make_size_bin list
+#y = size or length
+
+
+
+### A CER as plot 4
+spp4 <- "ACR CERV" # Go in alphabetical order
+#spp4 <- "ORB FAVE"
+
+# Surface area
+# domain_estimates = tmp$size_domain_est
+# demos = tmp$size_3d_demos
+# name = "Binned Surface Area in"~cm^3
+
+
+# Length
+domain_estimates = tmp$length_freq_domain_est
+demos = tmp$length_demos
+domain_mort = tmp$domain_mort_spp
+name = "Length (cm)"
+y = "length"
+
+domain_sub = subset(domain_estimates, SPECIES_CD == spp4)
+demos_sub = subset(demos, SPECIES_CD == spp4)
+mort_sub = domain_mort %>% dplyr::filter(SPECIES_CD == spp4)
+
+# Drop unseen factors levels for year - expanding below makes the unused year levels reappear
+domain_sub$YEAR <- droplevels(domain_sub$YEAR)
+
+domain_sub <-  domain_sub %>%
+  # add 0s in for species not observed
+  tidyr::expand(., REGION, SPECIES_NAME, SPECIES_CD, YEAR, bin_num) %>%
+  # connect back to demo_data to fill in with NAs
+  dplyr::full_join(., domain_sub,
+                   by = c('REGION', 'SPECIES_NAME',"SPECIES_CD", "YEAR", "bin_num")) %>%
+  # make a presence/absence column
+  dplyr::mutate(length_freq_domain = ifelse(is.na(length_freq_domain), 0, length_freq_domain)) %>% 
+  # add in mortality data
+  dplyr::full_join(., mort_sub, by = c('REGION', 'SPECIES_NAME',"SPECIES_CD", "YEAR", "bin_num", "bin_name", "n_strat"))
+
+
+n_bins = max(demos_sub$n_bins)
+#text_size = 11
+text_size = 14
+angle = dplyr::if_else(n_bins > 6 | y == "size", 45, 0)
+hjust = dplyr::if_else(angle == 45, 1, 0.5)
+min = min(demos_sub$min)
+bin_width = min(demos_sub$bin_width)
+small = dplyr::if_else(n_bins > 4, 0, 1)
+
+num_vec = seq_len(max(domain_sub$bin_num))
+
+
+
+lab_vec <- c("  4- 10", " 11-15", " 16-20", " 21-25", " 26-30", " 31-35", " 36-45", " 46-65", " 66-85", " 86-105", "106+")
+
+
+
+
+# Calculate number of individuals in each year
+n_corals <- tmp$length_demos %>% 
+  dplyr::filter(SPECIES_CD == spp4) %>% 
+  dplyr::group_by(YEAR) %>% 
+  dplyr::summarize(n_corals = sum(bin_tally))
+
+
+p1 <- ggplot(data = domain_sub, 
+             aes(x = as.integer(bin_num),
+                 y = length_freq_domain, fill = YEAR)) +
+  
+  geom_bar(stat="identity", position = "dodge2", width = .9, color="black", size=.5) +
+  
+   geom_line(aes(x = as.integer(bin_num), y=oldmort_domain, color=YEAR)) +
+  
+  geom_point(aes(x = as.integer(bin_num), y=oldmort_domain, color=YEAR), size=.9) +
+  
+  theme_Publication(base_size = 20) +
+  
+  facet_wrap(~SPECIES_NAME) +
+  
+  labs( y = "", x = "") +
+  
+  scale_x_continuous(name = name, 
+                     breaks = seq_along(lab_vec),
+                     labels = lab_vec) +
+  scale_y_continuous(expand = c(0, 0), 
+                     limits = c(0, 1.1)
+                     ) +
+  
+  #ggtitle(unique(domain_sub$SPECIES_NAME)) +
+  
+  ggtitle("Florida Keys") +
+  
+  theme(axis.text.x = element_text(size = text_size, angle = angle, 
+                                   hjust = hjust),
+        legend.key = element_rect(colour = NA),
+        #legend.position = "bottom",
+        legend.position = "none",
+        legend.direction = "horizontal",
+        legend.key.size= unit(0.5, "cm"),
+        legend.margin = margin(0,0,0,0, "cm"),
+        #plot.margin = unit(c(t = -2, r = 1, b = 2, l = 2),"mm"),
+        plot.margin = unit(c(t = 1, r = 1, b = -2, l = 2),"mm"),
+        strip.text = element_text(face = "italic")) +
+  scale_fill_manual(values=c('deepskyblue4', 'gold1')) + 
+  scale_color_manual(values=c('deepskyblue4', 'gold1'))
+
+#p1   
+p1   
+
+```
+
+
+### Species 2
+
+```{r, include = FALSE}
+#Create Plot
+#x = make_size_bin list
+#y = size or length
+
+spp1 <- "COL NATA" # Go in alphabetical order
+
+# Surface area
+# domain_estimates = tmp$size_domain_est
+# demos = tmp$size_3d_demos
+# name = "Binned Surface Area in"~cm^3
+
+
+# Length
+domain_estimates = tmp$length_freq_domain_est
+demos = tmp$length_demos
+domain_mort = tmp$domain_mort_spp
+name = "Length (cm)"
+y = "length"
+
+domain_sub = subset(domain_estimates, SPECIES_CD == spp1)
+demos_sub = subset(demos, SPECIES_CD == spp1)
+mort_sub = domain_mort %>% dplyr::filter(SPECIES_CD == spp1)
+
+# Drop unseen factors levels for year - expanding below makes the unused year levels reappear
+domain_sub$YEAR <- droplevels(domain_sub$YEAR)
+
+domain_sub <-  domain_sub %>%
+  # add 0s in for species not observed
+  tidyr::expand(., REGION, SPECIES_NAME, SPECIES_CD, YEAR, bin_num) %>%
+  # connect back to demo_data to fill in with NAs
+  dplyr::full_join(., domain_sub,
+                   by = c('REGION', 'SPECIES_NAME',"SPECIES_CD", "YEAR", "bin_num")) %>%
+  # make a presence/absence column
+  dplyr::mutate(length_freq_domain = ifelse(is.na(length_freq_domain), 0, length_freq_domain)) %>% 
+  # add in mortality data
+  dplyr::full_join(., mort_sub, by = c('REGION', 'SPECIES_NAME',"SPECIES_CD", "YEAR", "bin_num", "bin_name", "n_strat"))
+
+
+n_bins = max(demos_sub$n_bins)
+#text_size = 11
+text_size = 14
+#angle = dplyr::if_else(n_bins > 6 | y == "size", 45, 0)
+angle = 45
+hjust = dplyr::if_else(angle == 45, 1, 0.5)
+min = min(demos_sub$min)
+bin_width = min(demos_sub$bin_width)
+small = dplyr::if_else(n_bins > 4, 0, 1)
+
+num_vec = seq_len(max(domain_sub$bin_num))
+
+# lab_vec = paste(
+#   format(
+#     x = dplyr::if_else(num_vec == 1, 4, round(min + (bin_width * (num_vec-1))+2,small)),
+#     nsmall = small
+#   ),
+#   #"-",
+#   format(
+#     x = round(bin_width + min + (bin_width * (num_vec-1))+1,small),
+#     nsmall = small
+#   ),
+#   sep = "-"
+#)
+
+
+lab_vec <- c("  4- 10", " 11-15", " 16-20", " 21-25", " 26-30", " 31-35", " 36-45", " 46-65", " 66-85", " 86-105", "106+")
+
+
+# Calculate number of individuals in each year
+n_corals <- tmp$length_demos %>% 
+  dplyr::filter(SPECIES_CD == spp1) %>% 
+  dplyr::group_by(YEAR) %>% 
+  dplyr::summarize(n_corals = sum(bin_tally))
+
+
+p2 <- ggplot(data = domain_sub, 
+             aes(x = as.integer(bin_num),
+                 y = length_freq_domain, fill = YEAR)) +
+  
+   geom_point(aes(x = as.integer(bin_num), y=oldmort_domain, color=YEAR), size=.9) +
+  
+  geom_bar(stat="identity", position = "dodge2", width = .9, color="black", size=.5) +
+  
+  geom_line(aes(x = as.integer(bin_num), y=oldmort_domain, color=YEAR)) +
+  
+  theme_Publication(base_size = 20) +
+  
+  facet_wrap(~SPECIES_NAME) +
+  
+  labs( y = "Frequency", x = "") +
+  
+  scale_x_continuous(#name = name, 
+    breaks = seq_along(lab_vec),
+    labels = lab_vec) +
+  scale_y_continuous(expand = c(0, 0), 
+                     limits = c(0, 1.1)) +
+  
+  #ggtitle(unique(domain_sub$SPECIES_NAME)) +
+  
+  #ggtitle("Florida Keys") +
+  
+  theme(axis.text.x = element_text(size = text_size, angle = angle, 
+                                   hjust = hjust),
+        #legend.key = element_rect(colour = NA),
+        legend.position = "none",
+        # legend.direction = "horizontal",
+        # legend.key.size= unit(0.5, "cm"),
+        # legend.margin = margin(0,0,0,0, "cm")
+        #plot.margin = unit(c(t = 1, r = 1, b = -2, l = 2),"mm"),
+        plot.margin = unit(c(t = -2, r = 1, b = 2, l = 2),"mm"),
+        strip.text = element_text(face = "italic")) +
+  
+  scale_fill_manual(values=c('deepskyblue4', 'springgreen3', 'gold1')) +
+  scale_color_manual(values=c('deepskyblue4', 'springgreen3', 'gold1'))
+
+
+p2  
+
+```
+
+
+
+### Species 3
+
+```{r, include = FALSE}
+#Create Plot
+#x = make_size_bin list
+#y = size or length
+
+spp2 <- "MEA MEAN" # Go in alphabetical order
+
+# Surface area
+# domain_estimates = tmp$size_domain_est
+# demos = tmp$size_3d_demos
+# name = "Binned Surface Area in"~cm^3
+
+
+# Length
+domain_estimates = tmp$length_freq_domain_est
+demos = tmp$length_demos
+domain_mort = tmp$domain_mort_spp
+name = "Length (cm)"
+y = "length"
+
+domain_sub = subset(domain_estimates, SPECIES_CD == spp2)
+demos_sub = subset(demos, SPECIES_CD == spp2)
+mort_sub = domain_mort %>% dplyr::filter(SPECIES_CD == spp2)
+
+# Drop unseen factors levels for year - expanding below makes the unused year levels reappear
+domain_sub$YEAR <- droplevels(domain_sub$YEAR)
+
+domain_sub <-  domain_sub %>%
+  # add 0s in for species not observed
+  tidyr::expand(., REGION, SPECIES_NAME, SPECIES_CD, YEAR, bin_num) %>%
+  # connect back to demo_data to fill in with NAs
+  dplyr::full_join(., domain_sub,
+                   by = c('REGION', 'SPECIES_NAME',"SPECIES_CD", "YEAR", "bin_num")) %>%
+  # make a presence/absence column
+  dplyr::mutate(length_freq_domain = ifelse(is.na(length_freq_domain), 0, length_freq_domain)) %>% 
+  # add in mortality data
+  dplyr::full_join(., mort_sub, by = c('REGION', 'SPECIES_NAME',"SPECIES_CD", "YEAR", "bin_num", "bin_name", "n_strat"))
+
+
+
+n_bins = max(demos_sub$n_bins)
+#text_size = 11
+text_size = 14
+angle = dplyr::if_else(n_bins > 6 | y == "size", 45, 0)
+hjust = dplyr::if_else(angle == 45, 1, 0.5)
+min = min(demos_sub$min)
+bin_width = min(demos_sub$bin_width)
+small = dplyr::if_else(n_bins > 4, 0, 1)
+
+num_vec = seq_len(max(domain_sub$bin_num))
+
+# lab_vec = paste(
+#   format(
+#     x = dplyr::if_else(num_vec == 1, 4, round(min + (bin_width * (num_vec-1))+2,small)),
+#     nsmall = small
+#   ),
+#   #"-",
+#   format(
+#     x = round(bin_width + min + (bin_width * (num_vec-1))+1,small),
+#     nsmall = small
+#   ),
+#   sep = "-"
+# )
+
+
+# Calculate number of individuals in each year
+n_corals <- tmp$length_demos %>% 
+  dplyr::filter(SPECIES_CD == spp2) %>% 
+  dplyr::group_by(YEAR) %>% 
+  dplyr::summarize(n_corals = sum(bin_tally))
+
+
+lab_vec <- c("  4- 10", " 11-15", " 16-20", " 21-25", " 26-30", " 31-35", " 36-45", " 46-65", " 66-85", " 86-105", "106+")
+
+p3 <- ggplot(data = domain_sub, 
+             aes(x = as.integer(bin_num),
+                 y = length_freq_domain, fill = YEAR)) +
+  
+  geom_point(aes(x = as.integer(bin_num), y=oldmort_domain, color=YEAR), size=.9) +
+  
+  geom_bar(stat="identity", position = "dodge2", width = .9, color="black", size=.5) +
+  
+  geom_line(aes(x = as.integer(bin_num), y=oldmort_domain, color=YEAR)) +
+  
+  theme_Publication(base_size = 20) +
+  
+  facet_wrap(~SPECIES_NAME) +
+  
+  labs( y = "", x = "") +
+  
+  scale_x_continuous(#name = name, 
+    breaks = seq_along(lab_vec),
+    labels = lab_vec) +
+  scale_y_continuous(expand = c(0, 0), 
+                     limits = c(0, 1.1)) +
+  
+  #ggtitle(unique(domain_sub$SPECIES_NAME)) +
+  
+  #ggtitle("Dry Tortugas") +
+  
+  theme(axis.text.x = element_text(size = text_size, angle = angle, 
+                                   hjust = hjust),
+        #legend.key = element_rect(colour = NA),
+        legend.position = "none",
+        # legend.direction = "horizontal",
+        # legend.key.size= unit(0.5, "cm"),
+        # legend.margin = margin(0,0,0,0, "cm")
+        plot.margin = unit(c(t = 1, r = 2, b = -2, l = 0),"mm"),
+        strip.text = element_text(face = "italic")) +
+  
+  scale_fill_manual(values=c('deepskyblue4', 'springgreen3', 'gold1')) +
+  scale_color_manual(values=c('deepskyblue4', 'springgreen3', 'gold1'))
+
+#p1   
+p3   
+
+```
+
+### Species 4
+
+```{r, include = FALSE}
+#Create Plot
+#x = make_size_bin list
+#y = size or length
+
+spp3 <- "MON CAVE" # Go in alphabetical order
+
+# Surface area
+# domain_estimates = tmp$size_domain_est
+# demos = tmp$size_3d_demos
+# name = "Binned Surface Area in"~cm^3
+
+
+# Length
+domain_estimates = tmp$length_freq_domain_est
+demos = tmp$length_demos
+domain_mort = tmp$domain_mort_spp
+name = "Length (cm)"
+y = "length"
+
+domain_sub = subset(domain_estimates, SPECIES_CD == spp3)
+demos_sub = subset(demos, SPECIES_CD == spp3)
+mort_sub = domain_mort %>% dplyr::filter(SPECIES_CD == spp3)
+
+# Drop unseen factors levels for year - expanding below makes the unused year levels reappear
+domain_sub$YEAR <- droplevels(domain_sub$YEAR)
+
+domain_sub <-  domain_sub %>%
+  # add 0s in for species not observed
+  tidyr::expand(., REGION, SPECIES_NAME, SPECIES_CD, YEAR, bin_num) %>%
+  # connect back to demo_data to fill in with NAs
+  dplyr::full_join(., domain_sub,
+                   by = c('REGION', 'SPECIES_NAME',"SPECIES_CD", "YEAR", "bin_num")) %>%
+  # make a presence/absence column
+  dplyr::mutate(length_freq_domain = ifelse(is.na(length_freq_domain), 0, length_freq_domain)) %>% 
+  # add in mortality data
+  dplyr::full_join(., mort_sub, by = c('REGION', 'SPECIES_NAME',"SPECIES_CD", "YEAR", "bin_num", "bin_name", "n_strat"))
+
+
+
+n_bins = max(demos_sub$n_bins)
+#text_size = 11
+text_size = 14
+#angle = dplyr::if_else(n_bins > 6 | y == "size", 45, 0)
+angle = 45
+hjust = dplyr::if_else(angle == 45, 1, 0.5)
+min = min(demos_sub$min)
+bin_width = min(demos_sub$bin_width)
+small = dplyr::if_else(n_bins > 4, 0, 1)
+
+num_vec = seq_len(max(domain_sub$bin_num))
+
+# lab_vec = paste(
+#   format(
+#     x = dplyr::if_else(num_vec == 1, 4, round(min + (bin_width * (num_vec-1))+2,small)),
+#     nsmall = small
+#   ),
+#   #"-",
+#   format(
+#     x = round(bin_width + min + (bin_width * (num_vec-1))+1,small),
+#     nsmall = small
+#   ),
+#   sep = "-"
+# )
+
+
+# Calculate number of individuals in each year
+n_corals <- tmp$length_demos %>% 
+  dplyr::filter(SPECIES_CD == spp3) %>% 
+  dplyr::group_by(YEAR) %>% 
+  dplyr::summarize(n_corals = sum(bin_tally))
+
+
+
+lab_vec <- c("  4- 10", " 11-15", " 16-20", " 21-25", " 26-30", " 31-35", " 36-45", " 46-65", " 66-85", " 86-105", "106+")
+
+
+p4 <- ggplot(data = domain_sub, 
+             aes(x = as.integer(bin_num),
+                 y = length_freq_domain, fill = YEAR)) +
+  
+  geom_point(aes(x = as.integer(bin_num), y=oldmort_domain, color=YEAR), size=.9) +
+  
+  geom_bar(stat="identity", position = "dodge2", width = .9, color="black", size=.5) +
+  
+  geom_line(aes(x = as.integer(bin_num), y=oldmort_domain, color=YEAR)) +
+  
+  theme_Publication(base_size = 20) +
+  
+  facet_wrap(~SPECIES_NAME) +
+  
+  labs( y = "Frequency", x = "") +
+  
+  scale_x_continuous(name = name, 
+                     breaks = seq_along(lab_vec),
+                     labels = lab_vec) +
+  scale_y_continuous(expand = c(0, 0), 
+                     limits = c(0, 1.1)) +
+  
+  #ggtitle(unique(domain_sub$SPECIES_NAME)) +
+  
+  #ggtitle("Dry Tortugas") +
+  
+  theme(axis.text.x = element_text(size = text_size, angle = angle, 
+                                   hjust = hjust),
+        #legend.key = element_rect(colour = NA),
+        #legend.position = "none",
+        # legend.direction = "horizontal",
+        # legend.key.size= unit(0.5, "cm"),
+        # legend.margin = margin(0,0,0,0, "cm")
+        plot.margin = unit(c(t = -2, r = 1, b = 2, l = 2),"mm"),
+        strip.text = element_text(face = "italic")) +
+  scale_fill_manual(values=c('deepskyblue4', 'springgreen3', 'gold1')) +
+  scale_color_manual(values=c('deepskyblue4', 'springgreen3', 'gold1'))
+
+#p1   
+p4   
+
+```
+
+
+
+## Combine and export plots
+
+```{r, fig.height=10}
+
+#plot_grid(p1, p2, p3, p4, ncol = 2) 
+
+#ggarrange(p1, p2, p3, p4, ncol=2, nrow=2, common.legend = TRUE, legend="bottom", align = "hv")
+# ggarrange(p1 + theme(axis.title.y = element_blank()), p2, 
+#           p3 + theme(axis.title.y = element_blank(),
+#                      axis.title.x = element_blank()), 
+#           p4, ncol=1, nrow=4, common.legend = TRUE, legend="bottom") %>% annotate_figure(left = text_grob("Frequency\n", rot = 90, face="bold", size=20)) #align = "hv"
+
+
+library(ggpubr)
+
+egg::ggarrange(p1 + theme(axis.title.y = element_blank(), axis.title.x = element_blank()),
+               p2 + theme(axis.title.y = element_blank()), 
+               p3 + theme(axis.title.y = element_blank()),
+               p4 + theme(axis.title.y = element_blank()),
+               ncol = 1, nrow = 4)  %>% annotate_figure(left = text_grob("Frequency\n", rot = 90, face="bold", size=20))
+
+
+ggsave("FLK.size.compare.relative_withDRM.jpeg", 
+       path = "K:/_BioGeoProjects/NCRMP/Data Analysis/Analysis ready data/Data Queries/CRCP Reports & Requests/NCRMP_tech_memo/Florida 2022/Figures_with_DRM_data",
+       width = 11, 
+       height = 20,
+       dpi = 300)
+
+```
+
+
+# FLK
+
+# I. Benthic Community Results
+
+## Coral and Macroalgae Cover
+
+The Benthic Assessment surveys provide information on: 1) cover of biotic (e.g., coral, macroalgae, crustose coralline algae, sponges) and abiotic (e.g., hardbottom, softbottom) benthic habitat; 2) ESA-listed coral species detections at survey sites; 3) reef structural complexity; and 4) specific indicator species (i.e., Caribbean spiny lobster [*Panulirus argus*], queen conch [*Strombus gigas*], long-spined urchins [*Diadema antillarum*]). Benthic cover data are reported as percent cover by region both for a given sample year and, when applicable, as a trend analysis across years in each region.
+
+
+The mean coral cover shows a declining trend over time (Figure 4a). In `r samp_year`, mean coral cover was approximately `r flk_hc_avCvr`% ± `r flk_hc_se`. See Appendix (Figure A1) for mean coral cover stratified by habitat type. 
+
+Macroalgae cover was variable between years. In `r samp_year`, macroalgae cover was `r flk_macroal_avCvr`% ± `r flk_macroal_se`. Macroalgae cover is strongly influenced by the timing of the sampling season, the habitat type surveyed, and the specific functional group or species of macroalgae. 
+
+## Coral Demographics
+
+NCRMP coral demographic survey results show that `r nrow(FLK_Occ)` individual species have CVs of 20% or better (Figures 6–8). However, as coral species continue to decline from threats such as SCTLD, the frequency of occurrence declines, making it more difficult to achieve a 20% CV.
+
+The frequency of occurrence of coral species (reported as number of species observed by sites surveyed) and CV of density (Figures 6–8) illustrate that the species composition in each region is driven by the following coral species: *`r FLK_Occ[1,4]`*, *`r FLK_Occ[2,4]`*, *`r FLK_Occ[3,4]`*, *`r FLK_Occ[4,4]`*, and *`r FLK_Occ[5,4]`*.
+
+ESA-listed coral species were observed at `r round((FLK_FOI$foi * 100),0)`% of the `r FLK_FOI$Nsites` sites where ESA-listed species presence was surveyed as part of the benthic assessment in `r samp_year`. Individual ESA-listed species were observed at much lower frequencies (*Orbicella faveolata* = `r pull_foi("OFAV", "FLK")` , *Orbicella frankski* = `r pull_foi("OFRA", "FLK")`%, *Acropora cervicornis* = `r pull_foi("ACER", "FLK")`%, and *Mycetophyllia ferox* = `r pull_foi("MFER","FLK")`%). *Orbicella annularis*, *Acropora palmata*, and *Dendrogyra cylindrus* were not observed.
+
+## Coral Bleaching and Disease
+
+Bleaching and disease were present and recorded on a variety of coral species for the `r samp_year` sampling year (Figure 12). Figures 13 and 14 show the bleaching and disease prevalence, respectively, by coral species for the `r samp_year` sampling year. Prevalence here is defined as the mean percentage of corals with any bleaching/disease, out of the total number of corals by species for all sites. Orbicellids showed bleaching in all three regions in `r samp_year` NCRMP sampling. *Siderastrea* spp. had a high prevalence of bleaching in all three regions (Figure 13). The highest bleaching prevalence observed in `r samp_year` NCRMP sampling was on the coral species *`r pull_ble_prev(FLK_ble_prev)[1,3]`*, *`r pull_ble_prev(FLK_ble_prev)[2,3]`*, and *`r pull_ble_prev(FLK_ble_prev)[3,3]`* (Figure 13a).
+
+The highest prevalence of coral disease was observed in the coral species *`r pull_dis_prev(FLK_dis_prev)[1,3]`*, *`r pull_dis_prev(FLK_dis_prev)[2,3]`*, and *`r pull_dis_prev(FLK_dis_prev)[3,3]`* (Figure 14a). 
+
+
+```{r, message = FALSE}
+FLK.plot.ccov
+```
+
+
+```{r, message = FALSE}
+FLK.plot.mcov
+```
+
+\newpage
+
+```{r, fig.width = 10, fig.height=7}
+FLK.plot.cv_occ
+```
+
+\newpage
+
+```{r}
+FLK.plot.dens
+```
+
+
+```{r}
+FLK.plot.om
+```
+
+
+```{r}
+FLK.plot.surface
+```
+
+```{r, fig.height=7}
+#Bleaching and Disease Prevalence plots
+bp1
+dp1
+```
+
+```{r, image outputs - Mean coral density of species}
+#Mean coral density of species
+reg_means_plot
+```
+
+```{r, warning=FALSE}
+p = 1.6
+
+FLK_coraldemo_combined <- rbind(FLK_coraldemo1, FLK_coraldemo2) %>% 
+  mutate(size_3d = 
+           (4*pi*(((((MAX_DIAMETER/2)*(PERP_DIAMETER/2)) + 
+                      ((MAX_DIAMETER/2)*(HEIGHT/2)) + 
+                      ((MAX_DIAMETER/2*(HEIGHT/2))))/3)^1/p)/2) - 
+           ((4*pi*(((((MAX_DIAMETER/2)*(PERP_DIAMETER/2)) + 
+                       ((MAX_DIAMETER/2)*(HEIGHT/2)) + 
+                       ((MAX_DIAMETER/2*(HEIGHT/2))))/3)^1/p)/2)*
+              (OLD_MORT+RECENT_MORT)/100),
+         YEAR = as.factor(as.character(YEAR))) %>% 
+  filter(SPECIES_CD %in% analyzed_species, !is.na(size_3d))
+
+uniq_s <- unique(FLK_coraldemo_combined$SPECIES_NAME)
+
+for (i in uniq_s) {
+  print(
+    ggplot(data = subset(FLK_coraldemo_combined, SPECIES_NAME == i)) +
+      geom_density(alpha = .5, aes(x = size_3d, fill = YEAR)) +
+      theme_classic() +
+      labs(
+        x = "Surface Area in"~cm^3,
+        y = "Frequency") +
+      ggtitle(i)
+  )
+}
+
+
+```
+
+```{r, warning=FALSE}
+FLK_coraldemo_combined <- rbind(FLK_coraldemo1, FLK_coraldemo2) %>% 
+  mutate(YEAR = as.factor(as.character(YEAR))) %>% 
+  filter(SPECIES_CD %in% analyzed_species, !is.na(MAX_DIAMETER))
+
+uniq_s <- unique(FLK_coraldemo_combined$SPECIES_NAME)
+
+for (i in uniq_s) {
+  subset_df = subset(FLK_coraldemo_combined, SPECIES_NAME == i)
+  print(
+    ggplot(data = subset_df) +
+      geom_histogram(alpha = .5, bins = round(sqrt(nrow(subset_df)),0) , position = "dodge", aes(x = MAX_DIAMETER, fill = YEAR)) +
+      theme_classic() +
+      labs(
+        y = "Frequency",
+        x = "Length (cm)") +
+      ggtitle(i)
+  )
+}
+
+```
+
+

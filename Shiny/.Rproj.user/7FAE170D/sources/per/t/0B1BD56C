@@ -1,0 +1,27 @@
+{
+    "id": "0B1BD56C",
+    "path": "~/Shiny/Theme.R",
+    "project_path": "Theme.R",
+    "type": "r_source",
+    "hash": "145394561",
+    "contents": "",
+    "dirty": false,
+    "created": 1700157415698.0,
+    "source_on_save": false,
+    "relative_order": 5,
+    "properties": {
+        "tempName": "Untitled1",
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "32,1",
+        "scrollLine": "0"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1700157433,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1700157433157,
+    "read_only": false,
+    "read_only_alternatives": []
+}

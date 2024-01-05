@@ -1,0 +1,295 @@
+---
+title: "Shiny.Rmd"
+output: html_document
+author: "Julia Mateski"
+date: "2023-11-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(shinydashboard)
+library(shiny)
+library(plotly)
+library(tidyverse)
+library(ncrmp.benthics.analysis)
+library(ggplot2)
+library(cowplot)
+library(gridExtra)
+library(egg)
+library(leaflet)
+library(leaflet.extras)
+
+
+
+source("/Users/juliamateski/Shiny/Cover.R")
+source("/Users/juliamateski/Shiny/Theme.R")
+source("/Users/juliamateski/Shiny/CoralDemo.R")
+
+region_colors <- c("#2171b5", "#6baed6", "#bdd7e7")
+region_labels <- c("Dry Tortugas", "Southeast Florida", "Florida Keys")
+
+ui <- dashboardPage(
+  dashboardHeader(title = "Options"),
+  dashboardSidebar(
+    sidebarMenu(
+      id = "tabs",
+      menuItem("Benthic Community Assessment", tabName = "benthic_cover"),
+      menuItem("Coral Demographic Data", tabName = "coral_demographics"),
+      menuItem("Map", tabName = "leaflet")
+    ),
+    conditionalPanel(
+      condition = 'input.tabs == "benthic_cover"',
+      checkboxGroupInput("year", "Select Year:", 
+                         choices = c(2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022), selected = c(2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022)),
+      checkboxGroupInput("region", "Region", choices = c("Dry Tortugas", "Southeast Florida", "Florida Keys"), selected = "Dry Tortugas"),
+    ),
+    conditionalPanel(
+      condition = 'input.tabs == "coral_demographics"',
+      checkboxGroupInput("coral_species", "Coral Species", choices = c(
+        "Acropora cervicornis",
+        "Acropora palmata",
+        "Orbicella annularis",
+        "Orbicella franksi",
+        "Orbicella faveolata",
+        "Meandrina meandrites",
+        "Dendrogyra cylindrus",
+        "Pseudodiploria strigosa",
+        "Diploria labyrinthiformis",
+        "Colpophyllia natans",
+        "Siderastrea siderea",
+        "Porites astreoides",
+        "Montastraea cavernosa",
+        "Agaricia agaricites",
+        "Stephanocoenia intersepta"
+      ), selected = c(
+        "Acropora cervicornis",
+        "Acropora palmata",
+        "Orbicella annularis",
+        "Orbicella franksi",
+        "Orbicella faveolata",
+        "Meandrina meandrites",
+        "Dendrogyra cylindrus",
+        "Pseudodiploria strigosa",
+        "Diploria labyrinthiformis",
+        "Colpophyllia natans",
+        "Siderastrea siderea",
+        "Porites astreoides",
+        "Montastraea cavernosa",
+        "Agaricia agaricites",
+        "Stephanocoenia intersepta"
+      )),
+      selectInput("coral_year", "Year", choices = c(2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022), selected = 2022),
+      selectInput("coral_region", "Region", choices = c("Dry Tortugas", "Southeast Florida", "Florida Keys"), selected = "Dry Tortugas")
+    ),
+    conditionalPanel(
+      condition = 'input.tabs == "leaflet"', 
+      selectInput("map_region", "Select Region:",
+                  choices = c("Southeast Florida", "Florida Keys", "Dry Tortugas"),
+                  selected = "Florida Keys")
+    )
+  ),
+  dashboardBody(
+    tabItems(
+      tabItem(
+        tabName = "benthic_cover",
+        h2("% Cover of Benthic Communities"),
+        plotlyOutput("benthic_plot")
+      ),
+      tabItem(
+        tabName = "coral_demographics",
+        h2("Coral Demographics"),
+        plotOutput("coral_plot")
+      ),
+      tabItem(
+        tabName = "leaflet",
+        h2("Leaflet"),
+        leafletOutput("map")
+      )
+    )
+  )
+)
+
+```
+
+
+```{r}
+# Tort_weightedmeans <- NCRMP_Tort_Occ_Den_CV
+#  
+# om <- NCRMP_DRM_calculate_mortality(region = "Tortugas", project = "NCRMP_DRM")
+# Tort_om_spp <- om$Domain_est_old_mort_species
+# Tort_rm_spp <- om$Domain_est_rec_mort_species
+#   
+# s <- NCRMP_DRM_calculate_mean_colony_size(region = "Tortugas", project = "NCRMP_DRM")
+# Tort_s_spp <- s$Domain_est_species
+# species_list = c(
+#   "Acropora cervicornis",
+#   "Acropora palmata",
+#   "Orbicella annularis",
+#   "Orbicella franksi",
+#   "Orbicella faveolata",
+#   "Meandrina meandrites",
+#   "Dendrogyra cylindrus",
+#   "Pseudodiploria strigosa",
+#   "Diploria labyrinthiformis",
+#   "Colpophyllia natans",
+#   "Siderastrea siderea",
+#   "Porites astreoides",
+#   "Montastraea cavernosa",
+#   "Agaricia agaricites",
+#   "Stephanocoenia intersepta"
+# )
+# generateCoralPlot("Dry Tortugas", 2022, Tort_weightedmeans,Tort_om_spp, Tort_s_spp, Tort_rm_spp, species_list)
+```
+
+
+
+```{r}
+server <- function(input, output) {
+  
+  output$coral_plot <- renderPlot({
+    
+    selected_region <- input$coral_region
+    selected_year <- as.character(input$coral_year)
+    species_list <- input$coral_species
+  
+    
+    if (selected_region == "Dry Tortugas") {
+      
+      Tort_weightedmeans <- NCRMP_Tort_Occ_Den_CV
+      #, YEAR == max(NCRMP_Tort_Occ_Den_CV$YEAR)) 
+ 
+      om <- NCRMP_DRM_calculate_mortality(region = "Tortugas", project = "NCRMP_DRM")
+      Tort_om_spp <- om$Domain_est_old_mort_species
+      Tort_rm_spp <- om$Domain_est_rec_mort_species
+  
+      s <- NCRMP_DRM_calculate_mean_colony_size(region = "Tortugas", project = "NCRMP_DRM")
+      Tort_s_spp <- s$Domain_est_species
+      
+      generateCoralPlot("Dry Tortugas", selected_year, Tort_weightedmeans,Tort_om_spp, Tort_s_spp, Tort_rm_spp, species_list)
+    }
+    
+    
+    else if (selected_region == "Southeast Florida") {
+  SEFL_weightedmeans <- NCRMP_DRM_SEFCRI_Occ_Den_CV
+    #filter(YEAR == max(YEAR, na.rm = TRUE))
+  
+  om <- NCRMP_DRM_calculate_mortality(region = "SEFCRI", project = "NCRMP_DRM")
+  SEFL_om_spp <- om$Domain_est_old_mort_species
+  SEFL_rm_spp <- om$Domain_est_rec_mort_species
+  
+  s <- NCRMP_DRM_calculate_mean_colony_size(region = "SEFCRI", project = "NCRMP_DRM")
+  SEFL_s_spp <- s$Domain_est_species
+  
+  generateCoralPlot("Southeast Florida", selected_year, SEFL_weightedmeans, SEFL_om_spp, SEFL_s_spp, SEFL_rm_spp, species_list)
+}
+    
+    
+    else if (selected_region == "Florida Keys") {
+      FLK_weightedmeans <- NCRMP_DRM_FLK_Occ_Den_CV
+      #, YEAR == max(NCRMP_DRM_FLK_Occ_Den_CV$YEAR))
+      om <- NCRMP_DRM_calculate_mortality(region = "FLK", project = "NCRMP_DRM")
+      FLK_om_spp <- om$Domain_est_old_mort_species
+      FLK_rm_spp <- om$Domain_est_rec_mort_species
+      
+      # load species specific size - using max diameter here because DRM doesn't collect what's needed for area or volume
+    
+      s <- NCRMP_DRM_calculate_mean_colony_size(region = "FLK", project = "NCRMP_DRM")
+      FLK_s_spp <- s$Domain_est_species
+      generateCoralPlot("Florida Keys",selected_year, FLK_weightedmeans, FLK_om_spp, FLK_s_spp, FLK_rm_spp, species_list)
+    }
+       
+  
+ 
+})
+  
+
+
+output$benthic_plot <- renderPlotly({
+  
+  
+  selected_regions <- input$region
+  # benthics <- input$checkbox
+  # print(benthics)
+    
+  
+  if (is.null(selected_regions)) {
+    return(plot_ly())  
+  }
+  
+  selected_years <- as.character(input$year)
+  
+  plot_list <- list()
+  
+  for (region_name in selected_regions) {
+    region_data <- switch(
+      region_name,
+      "Dry Tortugas" = NCRMP_Tort_2014_22_cover_region %>% dplyr::mutate(YEAR = ifelse(YEAR == 2020, 2021, as.numeric(YEAR))),
+      "Southeast Florida" = NCRMP_SEFCRI_2014_22_cover_region,
+      "Florida Keys" = NCRMP_FLK_2014_22_cover_region %>% filter(YEAR != 2020),
+      NULL
+    )
+
+    
+    if (!is.null(region_data)) {
+      plot_list[[region_name]] <- generateRegionPlot(region_data, selected_years, region_name)
+      # plot_list[[region_name]] <- generateRegionPlot(region_data, selected_years, region_name, show_hard_corals, show_macroalgae)
+      # print(c(region_data, selected_years, region_name, show_hard_corals, show_macroalgae))
+    }
+  }
+  
+  final_plot <- subplot(plot_list) %>% layout(title = 'Coral Coverage by Region')
+  return(final_plot)
+})
+
+
+  
+output$map <- renderLeaflet({
+  
+  data <- reactive({
+    if (input$map_region == "Southeast Florida") {
+      full_join(NCRMP_SEFCRI_2014_22_density_site, NCRMP_SEFCRI_2014_22_cover_region)
+    } else if (input$map_region == "Dry Tortugas") {
+      full_join(NCRMP_Tort_2014_22_density_site, NCRMP_Tort_2014_22_cover_region)
+    } else if (input$map_region == "Florida Keys") {
+      full_join(NCRMP_FLK_2014_22_density_site, NCRMP_FLK_2014_22_cover_region)
+    }
+  })
+  
+  
+  
+  filtered_data <- reactive({
+    data() %>%
+      distinct(PRIMARY_SAMPLE_UNIT, .keep_all = TRUE) %>%
+      select(REGION, PRIMARY_SAMPLE_UNIT, YEAR, HABITAT_CD, LAT_DEGREES, LON_DEGREES, DENSITY, avCvr) %>%
+      mutate(across(c(LAT_DEGREES, LON_DEGREES), as.numeric))
+    
+    
+  })
+  
+   leaflet_map <- leaflet(filtered_data()) %>%
+    addProviderTiles(providers$Esri.OceanBasemap) %>%
+    addCircleMarkers(
+      lat = ~LAT_DEGREES,
+      lng = ~LON_DEGREES,
+      radius = 5, 
+      fillOpacity = 0.8,
+      fillColor = ~colorFactor(as.factor(YEAR), palette = "Set3"),
+      stroke = FALSE,  
+      popup = ~paste(
+        "Year: ", YEAR, "<br>",
+        "Habitat Type: ", HABITAT_CD, "<br>",
+        "Total Coral Density: ", DENSITY, "<br>",
+        "Total Hard Coral Cover: ", avCvr
+      )
+    ) 
+
+  leaflet_map
+})
+}
+
+shinyApp(ui, server)
+
+```

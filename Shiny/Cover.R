@@ -1,0 +1,188 @@
+generateRegionPlot <- function(region_data, selected_years, region_name, show_hard_coral, show_macroalgae) {
+
+
+  region_color <- region_colors[which(region_labels == region_name)]
+  region_label <- region_name
+
+  if(show_hard_coral)
+  region_data <- region_data %>%
+    filter(cover_group == "HARD CORALS" & YEAR %in% selected_years)
+
+  region_data <- region_data |>
+    NCRMP_perform_ttest(
+      metric1 = 'coral_cover',
+      metric2 = 'avCvr',
+      test_type = 'paired',
+      alpha = 0.05,
+      n_years = length(unique(region_data$YEAR)),
+      return_dataframe = T) |>
+    mutate(
+      Significance = if_else(
+        !is.na(YEAR) & YEAR == min(YEAR), FALSE,
+        if_else(
+          (lag(avCvr) >= LCI & lag(avCvr) <= UCI) |
+            (avCvr >= lag(LCI) & avCvr <= lag(UCI)),
+          FALSE,
+          TRUE
+        )
+      ),
+      Label = letters[cumsum(Significance == TRUE) + 1],
+      YEAR = as.factor(as.character(YEAR))
+    )
+
+  plot <- region_data %>%
+    plot_ly(
+      x = ~YEAR,
+      y = ~avCvr,
+      color = I(region_color),
+      text = ~paste("Year: ", YEAR, "<br>Cover: ", avCvr, "%"),
+      name = region_label,
+      type = "scatter",
+      mode = "lines+markers"
+    ) %>%
+    add_trace(
+      x = ~YEAR,
+      y = ~avCvr,
+      error_y = list(
+        type = "data",
+        symmetric = FALSE,
+        array = region_data$Std_Dev
+      ),
+      type = "scatter",
+      mode = "none",  
+      showlegend = FALSE
+    ) %>%
+    layout(
+      xaxis = list(type = "date"),
+      yaxis = list(title = "Cover (%)", range = c(0, 10)),
+      title = "Coral and Macroalgae Cover",
+      legend = list(
+        orientation = "h",
+        x = 0.5,
+        y = -0.1
+      )
+    )
+
+  plot <- plot %>% layout(
+    font = list(family = "Calibri"),
+    theme_Publication()
+  )
+
+  return(plot)
+}
+# 
+# generateRegionPlot <- function(region_data, selected_years, region_name, show_hard_corals, show_macroalgae) {
+# 
+#   region_color <- region_colors[which(region_labels == region_name)]
+#   region_label <- region_name
+# 
+#   # Initialize an empty plot
+#   plot <- plot_ly()
+# 
+#   # Filter for hard corals if the checkbox is selected
+#   if (show_hard_corals == TRUE) {
+#     region_data_hard <- region_data %>%
+#       filter(cover_group == "HARD CORALS" & YEAR %in% selected_years) |>
+#       NCRMP_perform_ttest(
+#         metric1 = 'coral_cover',
+#         metric2 = 'avCvr',
+#         test_type = 'paired',
+#         alpha = 0.05,
+#         n_years = length(unique(region_data$YEAR)),
+#         return_dataframe = T
+#       ) |>
+#       mutate(
+#         Significance = if_else(
+#           !is.na(YEAR) & YEAR == min(YEAR), FALSE,
+#           if_else(
+#             (lag(avCvr) >= LCI & lag(avCvr) <= UCI) |
+#               (avCvr >= lag(LCI) & avCvr <= lag(UCI)),
+#             FALSE,
+#             TRUE
+#           )
+#         ),
+#         Label = letters[cumsum(Significance == TRUE) + 1],
+#         YEAR = as.factor(as.character(YEAR))
+#       )
+#     print(region_data_hard)
+# 
+#     # Plot hard corals
+#     plot <- region_data_hard %>%
+#       plot_ly(
+#         x = ~YEAR,
+#         y = ~avCvr,
+#         color = I(region_color),
+#         text = ~paste("Year: ", YEAR, "<br>Cover: ", avCvr, "%"),
+#         name = region_label,
+#         type = "scatter",
+#         mode = "lines+markers"
+#       ) %>%
+#       add_trace(
+#         x = ~YEAR,
+#         y = ~avCvr,
+#         error_y = list(
+#           type = "data",
+#           symmetric = FALSE,
+#           array = region_data_hard$Std_Dev
+#         ),
+#         type = "scatter",
+#         mode = "none",  # This ensures only error bars are plotted
+#         showlegend = FALSE
+#       )
+#   }
+# 
+#   # Filter for macroalgae if the checkbox is selected
+#   else if (show_macroalgae == TRUE) {
+#     region_data_macroalgae <- region_data %>%
+#       filter(cover_group == "MACROALGAE" & YEAR %in% selected_years) |>
+#       NCRMP_perform_ttest(
+#         metric1 = 'macroalgae_cover',
+#         metric2 = 'avCvr',
+#         test_type = 'paired',
+#         alpha = 0.05,
+#         n_years = length(unique(region_data$YEAR)),
+#         return_dataframe = T
+#       ) |>
+#       mutate(
+#         Significance = if_else(
+#           !is.na(YEAR) & YEAR == min(YEAR), FALSE,
+#           if_else(
+#             (lag(avCvr) >= LCI & lag(avCvr) <= UCI) |
+#               (avCvr >= lag(LCI) & avCvr <= lag(UCI)),
+#             FALSE,
+#             TRUE
+#           )
+#         ),
+#         Label = letters[cumsum(Significance == TRUE) + 1],
+#         YEAR = as.factor(as.character(YEAR))
+#       )
+# 
+#     # Add macroalgae plot
+#     plot <- plot %>%
+#       add_trace(
+#         x = ~YEAR,
+#         y = ~avCvr,
+#         color = I("lightgreen"),  # Choose a color for macroalgae
+#         text = ~paste("Year: ", YEAR, "<br>Cover: ", avCvr, "%"),
+#         name = "Macroalgae",
+#         type = "scatter",
+#         mode = "lines+markers"
+#       )
+#   }
+# 
+#   # Layout settings
+#   plot <- plot %>% layout(
+#     xaxis = list(type = "date"),
+#     yaxis = list(title = "Cover (%)", range = c(0, 10)),
+#     title = "Coral and Macroalgae Cover",
+#     legend = list(
+#       orientation = "h",
+#       x = 0.5,
+#       y = -0.1
+#     ),
+#     font = list(family = "Calibri"),
+#     theme_Publication()
+#   )
+# 
+#   return(plot)
+# }

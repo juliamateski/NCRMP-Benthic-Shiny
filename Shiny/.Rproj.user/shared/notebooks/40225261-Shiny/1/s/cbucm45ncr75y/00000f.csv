@@ -1,0 +1,200 @@
+"0","library(shinydashboard)"
+"2","
+Attaching package: ‘shinydashboard’
+
+"
+"2","The following object is masked from ‘package:graphics’:
+
+    box
+
+"
+"0","library(shiny)"
+"0","library(plotly)"
+"2","Loading required package: ggplot2
+"
+"2","Registered S3 method overwritten by 'data.table':
+  method           from
+  print.data.table     
+"
+"2","Registered S3 method overwritten by 'htmlwidgets':
+  method           from         
+  print.htmlwidget tools:rstudio
+"
+"2","
+Attaching package: ‘plotly’
+
+"
+"2","The following object is masked from ‘package:ggplot2’:
+
+    last_plot
+
+"
+"2","The following object is masked from ‘package:stats’:
+
+    filter
+
+"
+"2","The following object is masked from ‘package:graphics’:
+
+    layout
+
+"
+"0","library(tidyverse)"
+"2","── [1mAttaching core tidyverse packages[22m ─────────────────────────────────────────────────────────────────────────────── tidyverse 2.0.0 ──
+[32m✔[39m [34mdplyr    [39m 1.1.4     [32m✔[39m [34mreadr    [39m 2.1.4
+[32m✔[39m [34mforcats  [39m 1.0.0     [32m✔[39m [34mstringr  [39m 1.5.1
+[32m✔[39m [34mlubridate[39m 1.9.3     [32m✔[39m [34mtibble   [39m 3.2.1
+[32m✔[39m [34mpurrr    [39m 1.0.2     [32m✔[39m [34mtidyr    [39m 1.3.0"
+"2","── [1mConflicts[22m ───────────────────────────────────────────────────────────────────────────────────────────────── tidyverse_conflicts() ──
+[31m✖[39m [34mdplyr[39m::[32mfilter()[39m masks [34mplotly[39m::filter(), [34mstats[39m::filter()
+[31m✖[39m [34mdplyr[39m::[32mlag()[39m    masks [34mstats[39m::lag()
+[36mℹ[39m Use the ]8;;http://conflicted.r-lib.org/conflicted package]8;; to force all conflicts to become errors"
+"0","library(ncrmp.benthics.analysis)"
+"0","library(ggplot2)"
+"0","library(cowplot)"
+"2","
+Attaching package: ‘cowplot’
+
+"
+"2","The following object is masked from ‘package:lubridate’:
+
+    stamp
+
+"
+"0","library(gridExtra)"
+"2","
+Attaching package: ‘gridExtra’
+
+"
+"2","The following object is masked from ‘package:dplyr’:
+
+    combine
+
+"
+"0","library(egg)"
+"0","library(leaflet)"
+"0","library(leaflet.extras)"
+"0",""
+"0","ui <- dashboardPage("
+"0","  "
+"0","  dashboardHeader(title = ""Options""),"
+"0","  "
+"0","  dashboardSidebar("
+"0","    "
+"0","    sidebarMenu("
+"0","      "
+"0","      id = ""tabs"","
+"0","      menuItem(""Benthic Community Assessment"", tabName = ""benthic_cover""),"
+"0","      menuItem(""Coral Demographic Data"", tabName = ""coral_demographics""),"
+"0","      menuItem(""Map"", tabName = ""leaflet""),"
+"0","      menuItem(""Size Frequency"", tabName = ""size_frequency""),"
+"0","      menuItem(""Bleaching"", tabName = ""bleaching""),"
+"0","      "
+"0","      conditionalPanel("
+"0","        condition = 'input.tabs == ""benthic_cover""',"
+"0","        checkboxGroupInput(""cover"", ""choose cover"", choices = c(""CCA"", ""HARD CORALS"", ""MACROALGAE"", ""RAMICRUSTA SPP."", ""SOFT CORALS"", ""SPONGES"", ""TURF ALGAE"", ""OTHER""), selected = c(""HARD CORALS"", ""MACROALGAE"")),"
+"0","        sliderInput(""year"", ""Select Year:"", min = 2014, max = 2022, value = c(2014, 2022), step = 1),"
+"0","        checkboxGroupInput(""region"", ""Region"", choices = c(""Dry Tortugas"", ""Southeast Florida"", ""Florida Keys""), selected = c(""Dry Tortugas"", ""Southeast Florida"", ""Florida Keys""))"
+"0","      ),"
+"0","      "
+"0","      conditionalPanel("
+"0","        condition = 'input.tabs == ""coral_demographics""',"
+"0","        checkboxGroupInput(""coral_species"", ""Coral Species"", choices = c("
+"0","          ""Acropora cervicornis"","
+"0","          ""Acropora palmata"","
+"0","          ""Orbicella annularis"","
+"0","          ""Orbicella franksi"","
+"0","          ""Orbicella faveolata"","
+"0","          ""Meandrina meandrites"","
+"0","          ""Dendrogyra cylindrus"","
+"0","          ""Pseudodiploria strigosa"","
+"0","          ""Diploria labyrinthiformis"","
+"0","          ""Colpophyllia natans"","
+"0","          ""Siderastrea siderea"","
+"0","          ""Porites astreoides"","
+"0","          ""Montastraea cavernosa"","
+"0","          ""Agaricia agaricites"","
+"0","          ""Stephanocoenia intersepta"""
+"0","        ), selected = c("
+"0","          ""Acropora cervicornis"","
+"0","          ""Acropora palmata"","
+"0","          ""Orbicella annularis"","
+"0","          ""Orbicella franksi"","
+"0","          ""Orbicella faveolata"")),"
+"0","        selectInput(""coral_year"", ""Year"", choices = c(2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022), selected = 2022),"
+"0","        selectInput(""coral_region"", ""Region"", choices = c(""Dry Tortugas"", ""Southeast Florida"", ""Florida Keys""), selected = ""Dry Tortugas"")"
+"0","      ),"
+"0","      "
+"0","      conditionalPanel("
+"0","        condition = 'input.tabs == ""leaflet""', "
+"0","        selectInput(""map_region"", ""Select Region:"","
+"0","                    choices = c(""Southeast Florida"", ""Florida Keys"", ""Dry Tortugas""),"
+"0","                    selected = ""Florida Keys""),"
+"0","        checkboxGroupInput(""year_selector"", ""Select Year(s)"", "
+"0","                       choices = 2014:2022, "
+"0","                       selected = 2014:2022),"
+"0","    ),"
+"0","    "
+"0","    conditionalPanel("
+"0","      condition = 'input.tabs == ""size_frequency""', "
+"0","      checkboxGroupInput(""coral_species"", ""Coral Species"", choices = c("
+"0","          ""Acropora cervicornis"","
+"0","          ""Acropora palmata"","
+"0","          ""Orbicella annularis"","
+"0","          ""Orbicella franksi"","
+"0","          ""Orbicella faveolata"","
+"0","          ""Meandrina meandrites"","
+"0","          ""Dendrogyra cylindrus"","
+"0","          ""Pseudodiploria strigosa"","
+"0","          ""Diploria labyrinthiformis"","
+"0","          ""Colpophyllia natans"","
+"0","          ""Siderastrea siderea"","
+"0","          ""Porites astreoides"","
+"0","          ""Montastraea cavernosa"","
+"0","          ""Agaricia agaricites"","
+"0","          ""Stephanocoenia intersepta"""
+"0","        ), selected = c("
+"0","          ""Meandrina meandrites"","
+"0","          ""Montastraea cavernosa"","
+"0","          ""Orbicella faveolata"","
+"0","          ""Siderastrea siderea"")),"
+"0","      selectInput(""size_freq_region"", ""Select Region:"","
+"0","                    choices = c(""Southeast Florida"", ""Florida Keys"", ""Dry Tortugas""),"
+"0","                    selected = ""Florida Keys""),"
+"0","      "
+"0","    )"
+"0","    "
+"0","    ) #end sidebar menu"
+"0","    ), #end dashboard sidebar"
+"0",""
+"0","  dashboardBody("
+"0","    tabItems("
+"0","      tabItem("
+"0","        tabName = ""benthic_cover"","
+"0","        h2(""% Cover of Benthic Communities""),"
+"0","        plotlyOutput(""benthic_plot"")"
+"0","      ),"
+"0","      tabItem("
+"0","        tabName = ""coral_demographics"","
+"0","        h2(""Coral Demographics""),"
+"0","        plotOutput(""coral_plot"")"
+"0","      ),"
+"0","      tabItem("
+"0","        tabName = ""leaflet"","
+"0","        h2(""Leaflet""),"
+"0","        leafletOutput(""map"")"
+"0","      ),"
+"0","      tabItem("
+"0","        tabName = ""size_frequency"","
+"0","        h2(""Size Frequency""),"
+"0","        leafletOutput(""size_freq"")"
+"0","      ),"
+"0","      tabItem("
+"0","        tabName = ""bleaching"","
+"0","        h2(""Bleaching""),"
+"0","        plotOutput(""bleach"")"
+"0","      )"
+"0","    )"
+"0","  )"
+"0",")"
+"0",""

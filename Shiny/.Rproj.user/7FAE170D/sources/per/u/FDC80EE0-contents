@@ -1,0 +1,48 @@
+---
+title: "Untitled"
+output: html_document
+date: "2023-12-06"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library(tidyverse)
+library(shiny)
+library(leaflet)
+
+
+# Define UI
+ui <- fluidPage(
+  titlePanel("Storm Center Locations"),
+  sidebarLayout(
+    sidebarPanel(
+      textInput("storm_name", "Enter Storm Name:", value = "")
+    ),
+    mainPanel(
+      leafletOutput("map")
+    )
+  )
+)
+
+# Define server
+server <- function(input, output, session) {
+ output$map <- renderLeaflet({
+    selected_storm <- storms[storms$name == input$storm_name, ]
+
+    this <- leaflet(data = selected_storm) %>%
+      addTiles() %>%
+      addMarkers(~long, ~lat, popup = ~paste("Storm Name: ", selected_storm$name))
+    
+    return(this)
+  })
+}
+
+# Run the Shiny app
+shinyApp(ui, server)
+
+```
+

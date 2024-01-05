@@ -1,0 +1,162 @@
+---
+title: "Untitled"
+output: html_document
+date: "2024-01-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+
+#Create Plot
+make_size_plot <- function(x, y = "length") {
+  
+  if (y == "size") {
+    domain_estimates = x$size_domain_est
+    demos = x$size_3d_demos
+    name = "Binned Surface Area in"~cm^3
+  }
+  
+  if (y == "length") {
+    domain_estimates = x$length_freq_domain_est
+    demos = x$length_demos
+    name = "Length (cm)"
+  }
+  
+  uniq_s <- unique(domain_estimates$SPECIES_CD) 
+  
+  for (i in uniq_s) {
+    
+    domain_sub = subset(domain_estimates, SPECIES_CD == i)
+    demos_sub = subset(demos, SPECIES_CD == i)
+    n_bins = max(demos_sub$n_bins)
+    text_size = 11
+    angle = dplyr::if_else(n_bins > 6 | y == "size", 45, 0)
+    hjust = dplyr::if_else(angle == 45, 1, 0.5)
+    min = min(demos_sub$min)
+    bin_width = min(demos_sub$bin_width)
+    small = dplyr::if_else(n_bins > 4, 0, 1)
+    
+    num_vec = seq_len(max(domain_sub$bin_num))
+    
+    x$bin_low = dplyr::if_else(x$bin_num == 1, 4, round(x$min + (x$bin_width * (x$bin_num-1))+2,2))
+    
+    x$bin_high = round(x$bin_width +x$min + (x$bin_width * (x$bin_num-1))+1,2)
+    
+    lab_vec = paste(x$bin_low, x$bin_high, sep = "-")
+    
+    lab_vec = paste(
+      format(
+        x = dplyr::if_else(num_vec == 1, 4, round(min + (bin_width * (num_vec-1))+2,small)),
+        nsmall = small
+      ),
+      #"-",
+      format(
+        x = round(bin_width + min + (bin_width * (num_vec-1))+1,small),
+        nsmall = small
+      ),
+      sep = "-"
+    )
+    
+    
+    
+    print(
+      ggplot(data = domain_sub, aes(x = as.integer(bin_num), y = length_freq_domain, 
+                                    fill = YEAR)) +
+        geom_bar(stat="identity", position = "dodge2", width = .9, color="black", size=.5) +
+        theme_Publication(base_size = 20) +
+        #    facet_wrap(~facet_label, nrow=4, scales = "free") +
+        labs(
+          y = "Frequency") +
+        scale_x_continuous(name = name, 
+                           breaks = seq_along(lab_vec),
+                           labels = lab_vec) +
+        ggtitle(unique(domain_sub$SPECIES_NAME)) +
+        theme(axis.text.x = element_text(size = text_size, angle = angle, 
+                                         hjust = hjust),
+              legend.key = element_rect(colour = NA),
+              legend.position = "bottom",
+              legend.direction = "horizontal",
+              legend.key.size= unit(0.5, "cm"),
+              legend.margin = margin(0,0,0,0, "cm")
+              #,
+              #legend.title = element_text(face="italic")
+        ) +
+        scale_fill_manual(values=c('steelblue2','springgreen3','gold1'))
+    )
+    
+  } 
+}
+
+
+```
+
+```{r}
+library(shiny)
+library(ggplot2)
+library(ncrmp.benthics.analysis)
+
+# Assuming you have the required functions available
+# Replace these lines with the actual function implementations
+# NCRMP_make_size_bins_mort <- function(...) { ... }
+# make_size_plot <- function(...) { ... }
+
+# Mock data for illustration purposes
+set.seed(123)
+tmp <- data.frame(
+  SPECIES_CD = rep(c("A", "B", "C"), each = 10),
+  bin_num = rep(1:10, times = 3),
+  length_freq_domain = rpois(30, 10),
+  YEAR = rep(c(2014, 2018, 2022), each = 10),
+  SPECIES_NAME = rep(c("Species A", "Species B", "Species C"), each = 10)
+)
+
+# Define UI
+ui <- fluidPage(
+  titlePanel("Size Plot Shiny App"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("species", "Select Species", choices = unique(tmp$SPECIES_CD)),
+      checkboxGroupInput("years", "Select Years", choices = unique(tmp$YEAR))
+    ),
+    mainPanel(
+      plotOutput("sizePlot")
+    )
+  )
+)
+
+# Define server
+server <- function(input, output) {
+  
+  # Create reactive data for the plot
+
+  reactiveData <- reactive({
+    # Call your function to generate data based on user input
+    NCRMP_make_size_bins( #changed from make size bins mort
+      region = "Tortugas",
+      project = "your_project_name",
+      years = input$years,
+      species_filter = input$species
+    )
+  })
+  
+  # Render the plot
+  output$sizePlot <- renderPlot({
+    tmp <- reactiveData()
+    
+    # Call the function to create the plot
+    make_size_plot(tmp, "length")
+  })
+  
+  
+
+}
+
+# Run the application
+shinyApp(ui, server)
+
+```
+
