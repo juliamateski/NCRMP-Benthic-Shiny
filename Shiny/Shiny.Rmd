@@ -5,6 +5,7 @@ author: "Julia Mateski"
 date: "2023-11-03"
 ---
 ```{r}
+
 library(shinydashboard)
 library(shiny)
 library(plotly)
@@ -24,7 +25,6 @@ source("/Users/juliamateski/Documents/GitHub/NCRMP-Benthic-Shiny/Shiny/MakeSizeB
 source("/Users/juliamateski/Documents/GitHub/NCRMP-Benthic-Shiny/Shiny/CoralBarChart.R")
 source("/Users/juliamateski/Documents/GitHub/NCRMP-Benthic-Shiny/Shiny/SizeFreqUI.R")
 source("/Users/juliamateski/Documents/GitHub/NCRMP-Benthic-Shiny/Shiny/habitat.R")
-
 
 
 ui <- dashboardPage(
@@ -47,9 +47,8 @@ ui <- dashboardPage(
         condition = 'input.tabs == "size_frequency"', 
       
         selectInput("freq_region", "Select Region:", 
-                    choices = c("SEFCRI", "FLK", "Tortugas", "GOM", "PRICO", 
-                                "STTSTJ", "STX"),
-                    selected = "SEFCRI"),
+                    choices = c("Southeast Florida", "Flordia Keys", "Dry Tortugas", "Flower Gardens", "Puerto Rico", "St. Thomas & St. John", "St. Croix"),
+                    selected = "Southeast Florida"),
 
         uiOutput("speciesSizeFreq") 
       ),
@@ -60,7 +59,7 @@ ui <- dashboardPage(
          conditionalPanel(
         condition = 'input.tabs == "benthic_cover"',
         checkboxGroupInput("cover", "choose cover", choices = c("CCA", "HARD CORALS", "MACROALGAE", "RAMICRUSTA SPP.", "SOFT CORALS", "SPONGES", "TURF ALGAE", "OTHER"), selected = c("HARD CORALS", "MACROALGAE")),
-        sliderInput("year", "Select Year:", min = 2014, max = 2022, value = c(2014, 2022), step = 1),
+        sliderInput("year", "Select Year:", min = 2014, max = 2023, value = c(2014, 2023), step = 1),
         checkboxGroupInput("region", "Region", choices = c("Dry Tortugas", "Southeast Florida", "Florida Keys", "Flower Gardens", "Puerto Rico", "St Thomas, St John", "St Croix"), selected = c("Dry Tortugas", "Southeast Florida", "Florida Keys", "Flower Gardens", "Puerto Rico", "St Thomas, St John", "St Croix")),
       ),
             conditionalPanel(
@@ -85,7 +84,7 @@ ui <- dashboardPage(
          "Porites astreoides",
          "Montastraea cavernosa",
           "Orbicella faveolata")),
-        selectInput("coral_year", "Year", choices = c( 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022), selected = 2022),
+        selectInput("coral_year", "Year", choices = c( 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023), selected = 2022),
     
         selectInput("coral_region", "Region", choices = c("Dry Tortugas", "Southeast Florida", "Florida Keys", "Flower Gardens", "Puerto Rico", "St Thomas, St John", "St Croix"), selected = "Dry Tortugas")
       ),
@@ -96,8 +95,8 @@ ui <- dashboardPage(
                     choices = c("Southeast Florida", "Florida Keys", "Dry Tortugas", "FGBNMS", "PRICO", "STTSTJ", "STX"),
                     selected = "Florida Keys"),
         checkboxGroupInput("year_selector", "Select Year(s)", 
-                           choices = 2014:2022, 
-                           selected = 2014:2022)
+                           choices = 2014:2023, 
+                           selected = 2014:2023)
       
       ),
       conditionalPanel(
@@ -107,7 +106,7 @@ ui <- dashboardPage(
                                 "Flower Gardens", "Puerto Rico", "St Thomas, St John", 
                                 "St Croix"), selected = "FLK"),
         selectInput("health_year", "Select Year", 
-                    choices = c(2013:2022), selected = 2022),
+                    choices = c(2013:2023), selected = 2023),
         uiOutput("speciesSelect")  
       )
     )
@@ -182,7 +181,8 @@ ui <- dashboardPage(
 
 ```{r #server}
 server <- function(input, output) {
-
+  
+  
   
 habitat_lookup <- data.frame(
   REGION = c("FLK", "FLK", "FLK", "FLK", "FLK", "FLK", "FLK", "FLK", "FLK",
@@ -249,23 +249,36 @@ FGBNMS_leaf <- full_join(NCRMP_FGBNMS_2013_22_density_site, NCRMP_FGBNMS_2013_22
       mutate(across(c(LAT_DEGREES, LON_DEGREES), as.numeric)) %>%
       left_join(habitat_lookup, by = c("REGION", "HABITAT_CD"))
 
-PRICO_leaf <-  full_join(NCRMP_PRICO_2014_21_density_site, NCRMP_PRICO_2014_21_cover_region)%>%
+PRICO_leaf <-  full_join(NCRMP_PRICO_2014_23_density_site, NCRMP_PRICO_2014_23_cover_region)%>%
       distinct(PRIMARY_SAMPLE_UNIT, .keep_all = TRUE) %>%
       select(REGION, PRIMARY_SAMPLE_UNIT, YEAR, HABITAT_CD, LAT_DEGREES, LON_DEGREES, DENSITY, avCvr) %>%
       mutate(across(c(LAT_DEGREES, LON_DEGREES), as.numeric)) %>%
       left_join(habitat_lookup, by = c("REGION", "HABITAT_CD"))
 
-STTSTJ_leaf <-  full_join(NCRMP_STTSTJ_2013_21_density_site, NCRMP_STTSTJ_2013_21_cover_region) %>%
+STTSTJ_leaf <-  full_join(NCRMP_STTSTJ_2013_23_density_site, NCRMP_STTSTJ_2013_23_cover_region) %>%
       distinct(PRIMARY_SAMPLE_UNIT, .keep_all = TRUE) %>%
       select(REGION, PRIMARY_SAMPLE_UNIT, YEAR, HABITAT_CD, LAT_DEGREES, LON_DEGREES, DENSITY, avCvr) %>%
       mutate(across(c(LAT_DEGREES, LON_DEGREES), as.numeric)) %>%
       left_join(habitat_lookup, by = c("REGION", "HABITAT_CD"))
  
-  
+
+region_lookup <- function(region) {
+  case_when(
+    region == "Southeast Florida" ~ "SEFCRI",
+    region == "Florida Keys" ~ "FLK",
+    region == "Dry Tortugas" ~ "Tortugas",
+    region == "Flower Gardens" ~ "GOM",
+    region == "Puerto Rico" ~ "PRICO",
+    region == "St. Thomas & St. John" ~ "STTSTJ",
+    region == "St. Croix" ~ "STX"
+  )
+}
   
 output$speciesSizeFreq <- renderUI({
     req(input$freq_region)
-    species_choices <- size_freq(input$freq_region)
+    region <- input$freq_region
+    region_code <- region_lookup(region)
+    species_choices <- size_freq(region_code)
     selectInput("speciesSizeFreq", "Select Species:", choices = species_choices)
   })
 
@@ -274,19 +287,21 @@ output$speciesSizeFreq <- renderUI({
   
 output$size_freq <- renderPlot({
   
+  region_code <- region_lookup(input$freq_region)
+  
   region_years <- list(
     'FLK' = c(2014, 2018, 2022),
     'SEFCRI' = c(2014, 2018, 2022),
     'Tortugas' = c(2014, 2018, 2022),
-    'PRICO' = c(2014, 2021),
-    'STX' = c(2015, 2021),
-    'STTSTJ' = c(2013, 2021),
+    'PRICO' = c(2014, 2023),
+    'STX' = c(2015, 2023),
+    'STTSTJ' = c(2013, 2023),
     'GOM' = c(2018, 2022)
   )
 
    spp1 <- input$speciesSizeFreq
    
-   tmp <- NCRMP_make_size_bins(region = input$freq_region, project = "NCRMP", years = region_years[[input$freq_region]])
+   tmp <- NCRMP_make_size_bins(region = region_code, project = "NCRMP", years = region_years[[region_code]])
     
     
     domain_sub <- tmp$length_freq_domain_est %>%
@@ -526,9 +541,9 @@ output$bleach <- renderPlot({
                       "Florida Keys" = NCRMP_DRM_FLK_2014_22_ble_prev_species_region,
                       "Dry Tortugas" = NCRMP_DRM_Tort_2014_22_ble_prev_species_region,
                       "Flower Gardens" = NCRMP_FGBNMS_2013_22_ble_prev_species_region,
-                      "Puerto Rico" = NCRMP_PRICO_2014_21_ble_prev_species_region,
-                      "St Thomas, St John" = NCRMP_STTSTJ_2013_21_ble_prev_species_region,
-                      "St Croix" = NCRMP_STX_2015_21_ble_prev_species_region)
+                      "Puerto Rico" = NCRMP_PRICO_2014_23_ble_prev_species_region,
+                      "St Thomas, St John" = NCRMP_STTSTJ_2013_23_ble_prev_species_region,
+                      "St Croix" = NCRMP_STX_2015_23_ble_prev_species_region)
 
     dataset %>%
       filter(species_name %in% input$speciesSelect) %>%
@@ -552,9 +567,9 @@ output$disease <- renderPlot({
                       "Florida Keys" = NCRMP_DRM_FLK_2014_22_dis_prev_species_region,
                       "Dry Tortugas" = NCRMP_DRM_Tort_2014_22_dis_prev_species_region,
                       "Flower Gardens" = NCRMP_FGBNMS_2013_22_dis_prev_species_region,
-                      "Puerto Rico" = NCRMP_PRICO_2014_21_dis_prev_species_region,
-                      "St Thomas, St John" = NCRMP_STTSTJ_2013_21_dis_prev_species_region,
-                      "St Croix" = NCRMP_STX_2015_21_dis_prev_species_region)
+                      "Puerto Rico" = NCRMP_PRICO_2014_23_dis_prev_species_region,
+                      "St Thomas, St John" = NCRMP_STTSTJ_2013_23_dis_prev_species_region,
+                      "St Croix" = NCRMP_STX_2015_23_dis_prev_species_region)
     
     dataset %>% 
       filter(species_name %in% input$speciesSelect) %>%
@@ -614,7 +629,7 @@ output$dry_tortugas_plot <- renderPlot({
     if ("Puerto Rico" %in% selected_regions) {
       selected_years <- as.character(input$year[1]:input$year[2])
       
-      region_data <- NCRMP_PRICO_2014_21_cover_region %>% dplyr::mutate(YEAR = ifelse(YEAR == 2020, 2021, as.numeric(YEAR)))
+      region_data <- NCRMP_PRICO_2014_23_cover_region %>% dplyr::mutate(YEAR = ifelse(YEAR == 2020, 2021, as.numeric(YEAR)))
       
       generateRegionPlot(region_data, selected_years, "Puerto Rico", selected_covers)
     }
@@ -629,7 +644,7 @@ output$dry_tortugas_plot <- renderPlot({
     if ("St Thomas, St John" %in% selected_regions) {
       selected_years <- as.character(input$year[1]:input$year[2])
       
-      region_data <- NCRMP_STTSTJ_2013_21_cover_region %>% dplyr::mutate(YEAR = ifelse(YEAR == 2020, 2021, as.numeric(YEAR)))
+      region_data <- NCRMP_STTSTJ_2013_23_cover_region %>% dplyr::mutate(YEAR = ifelse(YEAR == 2020, 2021, as.numeric(YEAR)))
       
       generateRegionPlot(region_data, selected_years, "St Thomas, St John", selected_covers)
     }
@@ -644,7 +659,7 @@ output$dry_tortugas_plot <- renderPlot({
     if ("St Croix" %in% selected_regions) {
       selected_years <- as.character(input$year[1]:input$year[2])
       
-      region_data <- NCRMP_STX_2015_21_cover_region %>% dplyr::mutate(YEAR = ifelse(YEAR == 2020, 2021, as.numeric(YEAR)))
+      region_data <- NCRMP_STX_2015_23_cover_region %>% dplyr::mutate(YEAR = ifelse(YEAR == 2020, 2021, as.numeric(YEAR)))
       
       generateRegionPlot(region_data, selected_years, "St Croix", selected_covers)
     }
