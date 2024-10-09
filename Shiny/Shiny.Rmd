@@ -121,15 +121,21 @@ ui <- dashboardPage(
       tabItem(
         tabName = "size_frequency",
         h2("Size Frequency"),
-        plotOutput("size_freq")
-      ),
+        fluidRow(
+        plotOutput("size_freq"),
+        p("Relative length (maximum coral diameter) frequency (bars) and percentage of old mortality (lines, points) by colony size of select coral species in specific sampling years. Note: gaps in lines indicate no data for specific year (color) and size class. Note: y-axis scale relates to both relative length frequency and percentage of old mortality (*100).")
+        )
+        ),
       
 
       tabItem(
         tabName = "bleaching",
         h2("Bleaching and Disease"),
-        plotOutput("bleach"),
-        plotOutput("disease")
+        fluidRow(
+          plotOutput("bleach"),
+          plotOutput("disease"),
+          p("Mean disease prevalence (left) and bleaching prevalence (right) ± SE by coral species for St. Thomas- St. John in 2023. The number of coral colonies surveyed by species are in parentheses. Only species with disease or bleaching observed in the 2023 NCRMP demographics surveys are included. Note: species are sorted in order of decreasing bleaching prevalence, and x-axis scale varies by metric.")
+        )
       ),
       
 
@@ -143,7 +149,8 @@ ui <- dashboardPage(
           box(title = "Flower Gardens", plotOutput("flower_gardens_plot", height = 400)),
           box(title = "Puerto Rico", plotOutput("puerto_rico_plot", height = 400)),
           box(title = "St Thomas, St John", plotOutput("st_thomas_st_john_plot", height = 400)),
-          box(title = "St Croix", plotOutput("st_croix_plot", height = 400))
+          box(title = "St Croix", plotOutput("st_croix_plot", height = 400)),
+          p("Overall cover (%) for benthic cover type for each region from NCRMP surveys. Statistical significance (Tukey’s two-tailed t-test), if present, is reported at p <0.05, and different letters (e.g., a and b) denote a difference between survey years. SE = standard error.")
         )
       ),
       
@@ -151,14 +158,20 @@ ui <- dashboardPage(
       tabItem(
         tabName = "coral_demographics",
         h2("Coral Demographics"),
-        plotOutput("coral_plot")
+        fluidRow(
+          plotOutput("coral_plot"),
+          p("Mean density of corals (colonies/m2), maximum diameter (cm), percentage of old mortality (%), and percentage of recent mortality (%) by coral species. Species are ordered in terms of decreasing density, and only species with densities above 0.01 are included.")
+        )
       ),
       
 
       tabItem(
         tabName = "leaflet",
         h2("Leaflet"),
-        leafletOutput("map")
+        fluidRow(
+          leafletOutput("map"),
+          p("Map of coral data by region and year input")
+        )
       )
     )
   )
