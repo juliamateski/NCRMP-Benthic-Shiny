@@ -17,29 +17,53 @@ library(egg)
 library(leaflet)
 library(leaflet.extras)
 
+source("/Users/juliamateski/Documents/GitHub/NCRMP-Benthic-Shiny/Shiny/Cover.R")
+source("/Users/juliamateski/Documents/GitHub/NCRMP-Benthic-Shiny/Shiny/plot_bleaching_prev.R")
+source("/Users/juliamateski/Documents/GitHub/NCRMP-Benthic-Shiny/Shiny/Theme.R")
+source("/Users/juliamateski/Documents/GitHub/NCRMP-Benthic-Shiny/Shiny/MakeSizeBins.R")
+source("/Users/juliamateski/Documents/GitHub/NCRMP-Benthic-Shiny/Shiny/CoralBarChart.R")
+source("/Users/juliamateski/Documents/GitHub/NCRMP-Benthic-Shiny/Shiny/SizeFreqUI.R")
+source("/Users/juliamateski/Documents/GitHub/NCRMP-Benthic-Shiny/Shiny/habitat.R")
+
+
+
 ui <- dashboardPage(
   
+  # Dashboard header
   dashboardHeader(title = "Options"),
   
+  # Dashboard sidebar with menu items
   dashboardSidebar(
-    
     sidebarMenu(
-      
       id = "tabs",
+      menuItem("Size Frequency", tabName = "size_frequency"),
+      menuItem("Bleaching", tabName = "bleaching"),
       menuItem("Benthic Community Assessment", tabName = "benthic_cover"),
       menuItem("Coral Demographic Data", tabName = "coral_demographics"),
       menuItem("Map", tabName = "leaflet"),
-      menuItem("Size Frequency", tabName = "size_frequency"),
-      menuItem("Bleaching", tabName = "bleaching"),
       
+
       conditionalPanel(
+        condition = 'input.tabs == "size_frequency"', 
+      
+        selectInput("freq_region", "Select Region:", 
+                    choices = c("SEFCRI", "FLK", "Tortugas", "GOM", "PRICO", 
+                                "STTSTJ", "STX"),
+                    selected = "SEFCRI"),
+
+        uiOutput("speciesSizeFreq") 
+      ),
+      
+      
+      
+      
+         conditionalPanel(
         condition = 'input.tabs == "benthic_cover"',
         checkboxGroupInput("cover", "choose cover", choices = c("CCA", "HARD CORALS", "MACROALGAE", "RAMICRUSTA SPP.", "SOFT CORALS", "SPONGES", "TURF ALGAE", "OTHER"), selected = c("HARD CORALS", "MACROALGAE")),
         sliderInput("year", "Select Year:", min = 2014, max = 2022, value = c(2014, 2022), step = 1),
-        checkboxGroupInput("region", "Region", choices = c("Dry Tortugas", "Southeast Florida", "Florida Keys"), selected = c("Dry Tortugas", "Southeast Florida", "Florida Keys"))
+        checkboxGroupInput("region", "Region", choices = c("Dry Tortugas", "Southeast Florida", "Florida Keys", "Flower Gardens", "Puerto Rico", "St Thomas, St John", "St Croix"), selected = c("Dry Tortugas", "Southeast Florida", "Florida Keys", "Flower Gardens", "Puerto Rico", "St Thomas, St John", "St Croix")),
       ),
-      
-      conditionalPanel(
+            conditionalPanel(
         condition = 'input.tabs == "coral_demographics"',
         checkboxGroupInput("coral_species", "Coral Species", choices = c(
           "Acropora cervicornis",
@@ -58,591 +82,103 @@ ui <- dashboardPage(
           "Agaricia agaricites",
           "Stephanocoenia intersepta"
         ), selected = c(
-          "Acropora cervicornis",
-          "Acropora palmata",
-          "Orbicella annularis",
-          "Orbicella franksi",
+         "Porites astreoides",
+         "Montastraea cavernosa",
           "Orbicella faveolata")),
-        selectInput("coral_year", "Year", choices = c(2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022), selected = 2022),
-        selectInput("coral_region", "Region", choices = c("Dry Tortugas", "Southeast Florida", "Florida Keys"), selected = "Dry Tortugas")
+        selectInput("coral_year", "Year", choices = c( 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022), selected = 2022),
+    
+        selectInput("coral_region", "Region", choices = c("Dry Tortugas", "Southeast Florida", "Florida Keys", "Flower Gardens", "Puerto Rico", "St Thomas, St John", "St Croix"), selected = "Dry Tortugas")
       ),
       
       conditionalPanel(
         condition = 'input.tabs == "leaflet"', 
         selectInput("map_region", "Select Region:",
-                    choices = c("Southeast Florida", "Florida Keys", "Dry Tortugas"),
+                    choices = c("Southeast Florida", "Florida Keys", "Dry Tortugas", "FGBNMS", "PRICO", "STTSTJ", "STX"),
                     selected = "Florida Keys"),
         checkboxGroupInput("year_selector", "Select Year(s)", 
-                       choices = 2014:2022, 
-                       selected = 2014:2022),
-    ),
-    
-    conditionalPanel(
-      condition = 'input.tabs == "size_frequency"', 
-      checkboxGroupInput("coral_species", "Coral Species", choices = c(
-          "Acropora cervicornis",
-          "Acropora palmata",
-          "Orbicella annularis",
-          "Orbicella franksi",
-          "Orbicella faveolata",
-          "Meandrina meandrites",
-          "Dendrogyra cylindrus",
-          "Pseudodiploria strigosa",
-          "Diploria labyrinthiformis",
-          "Colpophyllia natans",
-          "Siderastrea siderea",
-          "Porites astreoides",
-          "Montastraea cavernosa",
-          "Agaricia agaricites",
-          "Stephanocoenia intersepta"
-        ), selected = c(
-          "Meandrina meandrites",
-          "Montastraea cavernosa",
-          "Orbicella faveolata",
-          "Siderastrea siderea")),
-      selectInput("size_freq_region", "Select Region:",
-                    choices = c("Southeast Florida", "Florida Keys", "Dry Tortugas"),
-                    selected = "Florida Keys"),
+                           choices = 2014:2022, 
+                           selected = 2014:2022)
       
+      ),
+      conditionalPanel(
+        condition = 'input.tabs == "bleaching"', 
+        selectInput("health_region", "Select Region:", 
+                    choices = c("Southeast Florida", "Florida Keys", "Dry Tortugas", 
+                                "Flower Gardens", "Puerto Rico", "St Thomas, St John", 
+                                "St Croix"), selected = "FLK"),
+        selectInput("health_year", "Select Year", 
+                    choices = c(2013:2022), selected = 2022),
+        uiOutput("speciesSelect")  
+      )
     )
-    
-    ) #end sidebar menu
-    ), #end dashboard sidebar
+  ),
+  
 
   dashboardBody(
     tabItems(
+      
+
+      tabItem(
+        tabName = "size_frequency",
+        h2("Size Frequency"),
+        plotOutput("size_freq")
+      ),
+      
+
+      tabItem(
+        tabName = "bleaching",
+        h2("Bleaching and Disease"),
+        plotOutput("bleach"),
+        plotOutput("disease")
+      ),
+      
+
       tabItem(
         tabName = "benthic_cover",
         h2("% Cover of Benthic Communities"),
-        plotlyOutput("benthic_plot")
+        fluidRow(
+          box(title = "Dry Tortugas", plotOutput("dry_tortugas_plot", height = 400)),
+          box(title = "Southeast Florida", plotOutput("southeast_florida_plot", height = 400)),
+          box(title = "Florida Keys", plotOutput("florida_keys_plot", height = 400)),
+          box(title = "Flower Gardens", plotOutput("flower_gardens_plot", height = 400)),
+          box(title = "Puerto Rico", plotOutput("puerto_rico_plot", height = 400)),
+          box(title = "St Thomas, St John", plotOutput("st_thomas_st_john_plot", height = 400)),
+          box(title = "St Croix", plotOutput("st_croix_plot", height = 400))
+        )
       ),
+      
+
       tabItem(
         tabName = "coral_demographics",
         h2("Coral Demographics"),
         plotOutput("coral_plot")
       ),
+      
+
       tabItem(
         tabName = "leaflet",
         h2("Leaflet"),
         leafletOutput("map")
-      ),
-      tabItem(
-        tabName = "size_frequency",
-        h2("Size Frequency"),
-        leafletOutput("size_freq")
-      ),
-      tabItem(
-        tabName = "bleaching",
-        h2("Bleaching"),
-        plotOutput("bleach")
       )
     )
   )
 )
 
-```
-
-```{r #coral plot}
-generateRegionPlot <- function(region_data, selected_years, region_name, selected_covers) {
-  
- cover_colors <- c(
-  "CCA" = "#e27c7c",
-  "HARD CORALS" = "#a86464",
-  "MACROALGAE" = "#6d4b4b",
-  "RAMICRUSTA SPP." = "#503f3f",
-  "SOFT CORALS" = "#333333",
-  "SPONGES" = "#3c4e4b",
-  "TURF ALGAE" = "#466964",
-  "OTHER" = "#599e94"
-)
-  
- region_data <- region_data %>%
-    filter(cover_group %in% selected_covers & YEAR %in% selected_years)
-  
-  region_label <- region_name
-  
-  plot <- region_data %>%
-    plot_ly(
-      x = ~YEAR,
-      y = ~avCvr,
-      color = ~cover_group,
-      colors = cover_colors,
-      text = ~paste("Year: ", YEAR, "<br>Cover: ", avCvr, "%"),
-      name = ~cover_group,
-      type = "scatter",
-      mode = "lines+markers",
-      legendgroup = "all_regions"
-    ) %>%
-
-    add_trace(
-      x = ~YEAR,
-      y = ~avCvr,
-      error_y = list(
-        type = "data",
-        symmetric = FALSE,
-        array = region_data$Std_Dev
-      ),
-      type = "scatter",
-      mode = "none",
-      showlegend = FALSE
-    ) %>%
-    layout(
-      xaxis = list(type = "date"),
-      yaxis = list(title = "Cover (%)"),
-      title = "Coral and Macroalgae Cover",
-      legend = list(
-        orientation = "h",
-        x = 0.5,
-        y = -.1
-      )
-    )
-
-  plot <- plot %>% layout(
-    font = list(family = "Calibri"),
-    theme_Publication()
-  )
-
-  return(plot)
-  
-}
-
-```
-
-
-```{r #demo plot}     
-
-generateCoralPlot <- function(region, selected_year, weightedmeans, om_spp, s_spp, rm_spp, species_list) {
-  selected_year <- as.double(selected_year)
-  
-  a <- weightedmeans %>% 
-      dplyr::select(REGION, YEAR, SPECIES_CD, avDen, CV, SE) %>% 
-      dplyr::rename("SE_avDen" = SE)
-
-  b <- om_spp %>% 
-    dplyr::mutate(SPECIES_CD = SPECIES_NAME) %>% 
-    dplyr::select(REGION, YEAR, SPECIES_CD, avMort, SE) %>% 
-    dplyr::rename("avMortOld" = avMort,
-                  "SE_avMortOld" = SE)
-  c <- s_spp %>% 
-    dplyr::mutate(SPECIES_CD = SPECIES_NAME) %>% 
-    dplyr::select(REGION, YEAR, SPECIES_CD, avMaxdiam, SE_maxdiam)
-  
-  d <- rm_spp %>% 
-    dplyr::mutate(SPECIES_CD = SPECIES_NAME) %>% 
-    dplyr::select(REGION, YEAR, SPECIES_CD, avMort, SE) %>% 
-    dplyr::rename("avMortRec" = avMort,
-                  "SE_avMortRec" = SE)
-  
-  newdat <- a %>% 
-    dplyr::left_join(., b) %>% 
-    dplyr::left_join(., c) %>% 
-    dplyr::left_join(., d) %>%
-    arrange(desc(avDen)) %>%
-    dplyr::filter(CV < 1) %>%
-    mutate(REGION = region)
-  
- 
-if (!is.null(species_list) && !is.null(selected_year)) {
-  selected_year <- as.numeric(selected_year)
-  newdat <- newdat %>%
-    dplyr::filter(SPECIES_CD %in% species_list & YEAR == selected_year)
-}
-
-   print(newdat)
-
-  spp_levels <- newdat %>%
-    dplyr::arrange(avDen)
-
-  spp_levels <- spp_levels$SPECIES_CD
-
-  newdat <- newdat %>%
-    dplyr::mutate(SPECIES_CD = factor(SPECIES_CD, levels = spp_levels))
-  
-
-dens_plot <- ggplot(data = newdat, aes(x = avDen, y = SPECIES_CD)) +
-  geom_point(stat = "identity", size = 3.75) +
-  geom_errorbar(aes(xmin = avDen - SE_avDen, xmax = avDen + SE_avDen, y = SPECIES_CD), width = 0, color = "black") +
-  labs(x = expression(Density ~ (corals/m^{2})), y = "") +
-  theme_light() +
-  theme_Publication(base_size = 20) +
-  theme(axis.text.y = element_text(face = "italic"))
-
-om_plot <- ggplot(data = newdat, aes(x = avMortOld, y = SPECIES_CD)) +
-  geom_point(stat = "identity", size = 3.75) +
-  geom_errorbar(aes(xmin = avMortOld - SE_avMortOld, xmax = avMortOld + SE_avMortOld, y = SPECIES_CD), width = 0, color = "black") +
-  labs(x = expression(Old ~ mortality ~ ("%")), y = "") +
-  theme_light() +
-  theme_Publication(base_size = 20) +
-  theme(axis.text.y = element_blank(), axis.title.y = element_blank())
-
-rm_plot <- ggplot(data = newdat, aes(x = avMortRec, y = SPECIES_CD)) +
-  geom_point(stat = "identity", size = 3.75) +
-  geom_errorbar(aes(xmin = avMortRec - SE_avMortRec, xmax = avMortRec + SE_avMortRec, y = SPECIES_CD), width = 0, color = "black") +
-  labs(x = expression(Recent ~ mortality ~ ("%")), y = "") +
-  theme_light() +
-  theme_Publication(base_size = 20) +
-  theme(axis.text.y = element_blank(), axis.title.y = element_blank())
-
-size_plot <- ggplot(data = newdat, aes(x = avMaxdiam, y = SPECIES_CD)) +
-  geom_point(stat = "identity", size = 3.75) +
-  geom_errorbar(aes(xmin = avMaxdiam - SE_maxdiam, xmax = avMaxdiam + SE_maxdiam, y = SPECIES_CD), width = 0, color = "black") +
-  labs(x = expression(Maximum ~ diameter ~ (cm)), y = "") +
-  theme_light() +
-  theme_Publication(base_size = 20) +
-  theme(axis.text.y = element_blank(), axis.title.y = element_blank())
-
-
-combined_plot <- egg::ggarrange(dens_plot, om_plot, rm_plot, size_plot, ncol = 4)  # You can adjust ncol as needed
-
-  # Print or save the combined plot
-  print(combined_plot)
-
-
-# 
-# dens_plot <- plot_ly(data = newdat, x = ~avDen, y = ~SPECIES_CD, type = "scatter", mode = "markers") %>%
-#   #add_errorbars(x = ~avDen, y = ~SPECIES_CD, xmin = ~avDen - SE_avDen, xmax = ~avDen + SE_avDen) %>%
-#   layout(xaxis = list(title = expression(Density ~ (corals/m^{2})), yaxis = list(title = "")))
-# 
-# om_plot <- plot_ly(data = newdat, x = ~avMortOld, y = ~SPECIES_CD, type = "scatter", mode = "markers") %>%
-#   #add_errorbars(x = ~avMortOld, y = ~SPECIES_CD, xmin = ~avMortOld - SE_avMortOld, xmax = ~avMortOld + SE_avMortOld) %>%
-#   layout(xaxis = list(title = expression(Old ~ mortality ~ ("%")), yaxis = list(title = "")))
-# 
-# rm_plot <- plot_ly(data = newdat, x = ~avMortRec, y = ~SPECIES_CD, type = "scatter", mode = "markers") %>%
-#   #add_errorbars(x = ~avMortRec, y = ~SPECIES_CD, xmin = ~avMortRec - SE_avMortRec, xmax = ~avMortRec + SE_avMortRec) %>%
-#   layout(xaxis = list(title = expression(Recent ~ mortality ~ ("%")), yaxis = list(title = "")))
-# 
-# 
-# size_plot <- plot_ly(data = newdat, x = ~avMaxdiam, y = ~SPECIES_CD, type = "scatter", mode = "markers") %>%
-#   #add_errorbars(x = ~avMaxdiam, y = ~SPECIES_CD, xmin = ~avMaxdiam - SE_maxdiam, xmax = ~avMaxdiam + SE_maxdiam) %>%
-#   layout(xaxis = list(title = expression(Maximum ~ diameter ~ (cm)), yaxis = list(title = "")))
-# 
-#   subplot(dens_plot, om_plot, rm_plot, size_plot, nrows = 2)  
-
-  return(NULL)
-
-}
-
-```
-
-
-
-```{r #theme}
-theme_Publication <- function(base_size=14, base_family="Calibri") {
-  library(grid)
-  library(ggthemes)
-  library(extrafont)
-  (theme_foundation(base_size=base_size, base_family=base_family)
-    + theme(plot.title = element_text(face = "bold",
-            size = rel(1.2), hjust = 0.5),
-            text = element_text(),
-            panel.background = element_rect(colour = NA),
-            panel.spacing.x = unit(8, "mm"),
-            plot.background = element_rect(colour = NA),
-            panel.border = element_rect(colour = "grey50", size = 1),
-            axis.title = element_text(face = "bold",size = rel(1)),
-            axis.title.y = element_text(angle=90,vjust =2),
-            axis.title.x = element_text(vjust = -0.2),
-            axis.text = element_text(),
-            axis.line.x = element_line(colour="grey50", size = 1),
-            axis.line.y = element_line(colour="grey50", size = 1),
-            axis.ticks = element_line(),
-            panel.grid.major = element_line(colour="#f0f0f0"),
-            panel.grid.minor = element_line(colour="#f0f0f0"),
-            legend.key = element_rect(colour = NA),
-            legend.position = "bottom",
-            legend.direction = "horizontal",
-            legend.key.size= unit(0.5, "cm"),
-            legend.margin = margin(0,0,0,0, "cm"),
-            legend.title = element_text(face="italic"),
-            plot.margin=unit(c(10,5,5,5),"mm"),
-            strip.background=element_blank(),
-            strip.text = element_text(face="plain")
-    ))
-
-}
-```
-
-```{r eval=FALSE}
-library(leaflet)
-library(shiny)
-library(ncrmp.benthics.analysis)
-library(dplyr)
-library(leaflet.extras)
-
-ui <- fluidPage(
-  titlePanel("Leaflet Map Prep"),
-  sidebarLayout(
-    sidebarPanel(
-      selectInput("popup", "Select Metric:",
-                  choices = c("Habitat Type", "Total Hard Coral Cover", "Total Coral Density"),
-                  selected ="Total Coral Density"),
-      selectInput("region", "Select Region:",
-                  choices = c("Southeast Florida", "Florida Keys", "Dry Tortugas"),
-                  selected = "Southeast Florida")
-    ),
-    mainPanel(
-      leafletOutput("map")
-    )
-  )
-)
-
-server <- function(input, output) {
-  data <- reactive({
-    if (input$region == "Southeast Florida") {
-      full_join(NCRMP_SEFCRI_2014_22_density_site, NCRMP_SEFCRI_2014_22_cover_region)
-    } else if (input$region == "Dry Tortugas") {
-      full_join(NCRMP_Tort_2014_22_density_site, NCRMP_Tort_2014_22_cover_region)
-    } else if (input$region == "Florida Keys") {
-      full_join(NCRMP_FLK_2014_22_density_site, NCRMP_FLK_2014_22_cover_region)
-    }
-  })
-  
-  filtered_data <- reactive({
-    data() %>%
-      filter(YEAR %in% input$year_selector) %>%
-      distinct(PRIMARY_SAMPLE_UNIT, .keep_all = TRUE) %>%
-      select(REGION, PRIMARY_SAMPLE_UNIT, YEAR, HABITAT_CD, LAT_DEGREES, LON_DEGREES, DENSITY, avCvr) %>%
-      mutate(across(c(LAT_DEGREES, LON_DEGREES), as.numeric))
-  })
-  
-  output$map <- renderLeaflet({
-    if (input$popup == "Total Hard Coral Cover") {
-      leaflet(filtered_data()) %>%
-        addTiles() %>%
-        addHeatmap(
-          lng = ~LON_DEGREES,
-          lat = ~LAT_DEGREES,
-          intensity = ~avCvr,
-          blur = 20,
-          #minOpacity = 0.05,
-          max = 0.05,
-          radius = 15,
-          #gradient = colorQuantile("viridis", filtered_data()$DENSITY),
-          
-        )
-    } else if (input$popup == "Total Coral Density") {
-      leaflet(filtered_data()) %>%
-        addTiles() %>%
-        addHeatmap(
-          lng = ~LON_DEGREES,
-          lat = ~LAT_DEGREES,
-          intensity = ~DENSITY,
-          blur = 20,
-          #minOpacity = 0.05,
-          max = 0.05,
-          radius = 15,
-          #gradient = colorQuantile("viridis", filtered_data()$DENSITY),
-    
-        )
-    } else if (input$popup == "Habitat Type") {
-      leaflet(filtered_data()) %>%
-        addTiles() %>%
-        addMarkers(
-          lat = ~LAT_DEGREES,
-          lng = ~LON_DEGREES,
-          label = ~HABITAT_CD
-        )
-    }
-  })
-}
-
-shinyApp(ui, server)
-
-```
-
-```{r}
 ```
 
 
 ```{r #server}
 server <- function(input, output) {
-  
 
   
-  output$bleach <- renderPlot({
-    
-    make_size_plot <- function(x, y = "length") {
-  
-  if (y == "size") {
-    domain_estimates = x$size_domain_est
-    demos = x$size_3d_demos
-    name = "Binned Surface Area in"~cm^3
-  }
-  
-  if (y == "length") {
-    domain_estimates = x$length_domain_est
-    demos = x$length_demos
-    name = "Length (cm)"
-  }
-  
-  uniq_s <- unique(domain_estimates$SPECIES_CD) 
-  
-  for (i in uniq_s) {
-    
-    domain_sub = subset(domain_estimates, SPECIES_CD == i)
-    demos_sub = subset(demos, SPECIES_CD == i)
-    n_bins = max(demos_sub$n_bins)
-    text_size = 11
-    angle = dplyr::if_else(n_bins > 6 | y == "size", 45, 0)
-    hjust = dplyr::if_else(angle == 45, 1, 0.5)
-    min = min(demos_sub$min)
-    bin_width = min(demos_sub$bin_width)
-    small = dplyr::if_else(n_bins > 4, 0, 1)
-    
-    num_vec = seq_len(max(domain_sub$bin_num))
-    
-    x$bin_low = dplyr::if_else(x$bin_num == 1, 4, round(x$min + (x$bin_width * (x$bin_num-1))+2,2))
-
-    x$bin_high = round(x$bin_width +x$min + (x$bin_width * (x$bin_num-1))+1,2)
-    
-    lab_vec = paste(x$bin_low, x$bin_high, sep = "-")
-    
-    lab_vec = paste(
-      format(
-        x = dplyr::if_else(num_vec == 1, 4, round(min + (bin_width * (num_vec-1))+2,small)),
-        nsmall = small
-        ),
-        #"-",
-      format(
-        x = round(bin_width + min + (bin_width * (num_vec-1))+1,small),
-        nsmall = small
-      ),
-      sep = "-"
-      )
-    
-    print(
-      ggplot(data = domain_sub, aes(x = as.integer(bin_num), y = avtally, 
-                                    fill = YEAR)) +
-    geom_bar(stat="identity", position = "dodge2", width = .9, color="black", size=.5) +
-     theme_Publication(base_size = 20) + 
-  #    facet_wrap(~facet_label, nrow=4, scales = "free") +
-        labs(
-          y = "Frequency") +
-        scale_x_continuous(name = name, 
-                           breaks = seq_along(lab_vec),
-                           labels = lab_vec) +
-        ggtitle(unique(domain_sub$SPECIES_NAME)) +
-        theme(axis.text.x = element_text(size = text_size, angle = angle, 
-                                         hjust = hjust),
-             legend.key = element_rect(colour = NA),
-             legend.position = "bottom",
-             legend.direction = "horizontal",
-             legend.key.size= unit(0.5, "cm"),
-             legend.margin = margin(0,0,0,0, "cm")
-             #,
-             #legend.title = element_text(face="italic")
-             ) +
-        scale_fill_manual(values=c('steelblue3','springgreen3','gold1')))
-  } 
-}
-    
-    tmp <- NCRMP_make_size_bins(region = "Tortugas",
-                            project = "NCRMP",
-                            years = c(2014, 2018, 2022),
-                            species_filter = analyzed_species)
-    
-    make_size_plot(tmp, "length")
-    
-    
-    spp1 <- "ACR CERV" # Go in alphabetical order
-
-# Length
-domain_estimates = tmp$length_domain_est %>%
-  dplyr::mutate(YEAR = dplyr::case_when(YEAR == "2020" ~ "2021", TRUE ~ as.character(YEAR)),
-                YEAR = as.factor(YEAR))
-demos = tmp$length_demos %>%
-  dplyr::mutate(YEAR = dplyr::case_when(YEAR == "2020" ~ "2021", TRUE ~ as.character(YEAR)),
-                YEAR = as.factor(YEAR))
-name = "Length (cm)"
-  
-domain_sub = subset(domain_estimates, SPECIES_CD == spp1)
-demos_sub = subset(demos, SPECIES_CD == spp1)
-
-domain_sub <-  domain_sub %>%
-    # add 0s in for species not observed
-    tidyr::expand(., REGION, SPECIES_NAME, SPECIES_CD, YEAR, bin_num) %>%
-    # connect back to demo_data to fill in with NAs
-    dplyr::full_join(., domain_sub,
-                     by = c('REGION', 'SPECIES_NAME',"SPECIES_CD", "YEAR", "bin_num")) %>%
-    # make a presence/absence column
-    dplyr::mutate(avtally = ifelse(is.na(avtally), 0, avtally),
-                  bin_name = dplyr::case_when(bin_num == 6 ~ "106-125", TRUE ~ as.character(bin_name)))
-
-    #update this every year to make sure includes all size bins
-    
-    
-    n_bins = max(demos_sub$n_bins)
-    text_size = 11
-    #angle = dplyr::if_else(n_bins > 6 | y == "size", 45, 0)
-    angle = 45
-    hjust = dplyr::if_else(angle == 45, 1, 0.5)
-    min = min(demos_sub$min)
-    bin_width = min(demos_sub$bin_width)
-    small = dplyr::if_else(n_bins > 4, 0, 1)
-    
-    num_vec = seq_len(max(domain_sub$bin_num))
-    
-    lab_vec = paste(
-      format(
-        x = dplyr::if_else(num_vec == 1, 4, round(min + (bin_width * (num_vec-1))+2,small)),
-        nsmall = small
-        ),
-        #"-",
-      format(
-        x = round(bin_width + min + (bin_width * (num_vec-1))+1,small),
-        nsmall = small
-      ),
-      sep = "-"
-      )
-    
-    p1 <- ggplot(data = domain_sub, 
-                 aes(x = as.integer(bin_num),
-                     y = avtally, fill = YEAR)) +
-      
-      geom_bar(stat="identity", position = "dodge2", width = .9, color="black", size=.5) +
-      
-      theme_Publication(base_size = 20) + 
-      
-      facet_wrap(~SPECIES_NAME) +
-      
-      labs( y = "", x = "") +
-      
-      scale_x_continuous(#name = name, 
-                         breaks = seq_along(lab_vec),
-                         labels = lab_vec) +
-      scale_y_continuous(expand = c(0, 0), 
-                     limits = c(0, 3)) + #UPDATE based on limits each year
-      
-      #ggtitle(unique(domain_sub$SPECIES_NAME)) +
-      
-      theme(axis.text.x = element_text(size = text_size, angle = angle, 
-                                       hjust = hjust),
-            #legend.key = element_rect(colour = NA),
-            legend.position = "none",
-            # legend.direction = "horizontal",
-            # legend.key.size= unit(0.5, "cm"),
-            # legend.margin = margin(0,0,0,0, "cm")
-            plot.margin = unit(c(t = 1, r = 2, b = -2, l = 0),"mm"),
-            strip.text = element_text(face = "italic")) +
-      scale_fill_manual(values=c('deepskyblue4','springgreen3','gold1'))
-  
- return(p1) 
-
-  })
-  
-  output$map <- renderLeaflet({
-    
-   habitat_lookup <- data.frame(
-  REGION = c(
-    "FLK", "FLK", "FLK", "FLK", "FLK", "FLK", "FLK", "FLK", "FLK", 
-    "Tortugas", "Tortugas", "Tortugas", "Tortugas", "Tortugas", "Tortugas", "Tortugas", "Tortugas", "Tortugas", 
-    "SEFCRI", "SEFCRI", "SEFCRI", "SEFCRI", "SEFCRI", "SEFCRI", "SEFCRI", "SEFCRI", "SEFCRI", "SEFCRI", "SEFCRI", "SEFCRI"
-  ),
+habitat_lookup <- data.frame(
+  REGION = c("FLK", "FLK", "FLK", "FLK", "FLK", "FLK", "FLK", "FLK", "FLK",
+             "Tortugas", "Tortugas", "Tortugas", "Tortugas", "Tortugas", "Tortugas", "Tortugas", "Tortugas", "Tortugas",
+             "SEFCRI", "SEFCRI", "SEFCRI", "SEFCRI", "SEFCRI", "SEFCRI", "SEFCRI", "SEFCRI", "SEFCRI", "SEFCRI", "SEFCRI", "SEFCRI"),
   HABITAT_CD = c(
     "CONT_HR", "CONT_LR", "CONT_MR", "ISOL_HR", "ISOL_LR", "ISOL_MR", "RUBB_LR", "SPGR_HR", "SPGR_MR",
     "CONT_HR", "CONT_LR", "CONT_MR", "ISOL_HR", "ISOL_LR", "ISOL_MR", "RUBB_LR", "SPGR_HR", "SPGR_MR",
-    "APRD", "CPDP", "CPSH", "DPRC", "LIRI", "LIRM", "LIRO", "PTCH", "RGDP", "RGSH", "SCRS", "SPGR"
-  ),
+    "APRD", "CPDP", "CPSH", "DPRC", "LIRI", "LIRM", "LIRO", "PTCH", "RGDP", "RGSH", "SCRS", "SPGR"),
   HABITAT_TYPE = c(
     "Contiguous reef, non-spur-groove, high vertical relief",
     "Contiguous reef, non-spur-groove, low vertical relief",
@@ -673,31 +209,142 @@ domain_sub <-  domain_sub %>%
     "Ridge Deep",
     "Ridge Shallow",
     "Scattered Coral and Rock in Sand",
-    "Spur and Groove"
-  )
+    "Spur and Groove")
 )
-  
-  data <- reactive({
-    if (input$map_region == "Southeast Florida") {
-      full_join(NCRMP_SEFCRI_2014_22_density_site, NCRMP_SEFCRI_2014_22_cover_region)
-    } else if (input$map_region == "Dry Tortugas") {
-      full_join(NCRMP_Tort_2014_22_density_site, NCRMP_Tort_2014_22_cover_region)
-    } else if (input$map_region == "Florida Keys") {
-      full_join(NCRMP_FLK_2014_22_density_site, NCRMP_FLK_2014_22_cover_region)
-    }
-  })
 
-  filtered_data <- reactive({
-    req(input$year_selector)
-    data() %>%
-       filter(YEAR %in% input$year_selector) %>%
+SEFCRI_leaf <- full_join(NCRMP_SEFCRI_2014_22_density_site, NCRMP_SEFCRI_2014_22_cover_region)%>%
       distinct(PRIMARY_SAMPLE_UNIT, .keep_all = TRUE) %>%
       select(REGION, PRIMARY_SAMPLE_UNIT, YEAR, HABITAT_CD, LAT_DEGREES, LON_DEGREES, DENSITY, avCvr) %>%
       mutate(across(c(LAT_DEGREES, LON_DEGREES), as.numeric)) %>%
       left_join(habitat_lookup, by = c("REGION", "HABITAT_CD"))
+
+TORT_leaf <- full_join(NCRMP_Tort_2014_22_density_site, NCRMP_Tort_2014_22_cover_region)%>%
+      distinct(PRIMARY_SAMPLE_UNIT, .keep_all = TRUE) %>%
+      select(REGION, PRIMARY_SAMPLE_UNIT, YEAR, HABITAT_CD, LAT_DEGREES, LON_DEGREES, DENSITY, avCvr) %>%
+      mutate(across(c(LAT_DEGREES, LON_DEGREES), as.numeric)) %>%
+      left_join(habitat_lookup, by = c("REGION", "HABITAT_CD"))
+
+KEYS_leaf <- full_join(NCRMP_FLK_2014_22_density_site, NCRMP_FLK_2014_22_cover_region) %>%
+      distinct(PRIMARY_SAMPLE_UNIT, .keep_all = TRUE) %>%
+      select(REGION, PRIMARY_SAMPLE_UNIT, YEAR, HABITAT_CD, LAT_DEGREES, LON_DEGREES, DENSITY, avCvr) %>%
+      mutate(across(c(LAT_DEGREES, LON_DEGREES), as.numeric)) %>%
+      left_join(habitat_lookup, by = c("REGION", "HABITAT_CD"))
+
+FGBNMS_leaf <- full_join(NCRMP_FGBNMS_2013_22_density_site, NCRMP_FGBNMS_2013_22_cover_region)%>%
+      distinct(PRIMARY_SAMPLE_UNIT, .keep_all = TRUE) %>%
+      select(REGION, PRIMARY_SAMPLE_UNIT, YEAR, HABITAT_CD, LAT_DEGREES, LON_DEGREES, DENSITY, avCvr) %>%
+      mutate(across(c(LAT_DEGREES, LON_DEGREES), as.numeric)) %>%
+      left_join(habitat_lookup, by = c("REGION", "HABITAT_CD"))
+
+PRICO_leaf <-  full_join(NCRMP_PRICO_2014_21_density_site, NCRMP_PRICO_2014_21_cover_region)%>%
+      distinct(PRIMARY_SAMPLE_UNIT, .keep_all = TRUE) %>%
+      select(REGION, PRIMARY_SAMPLE_UNIT, YEAR, HABITAT_CD, LAT_DEGREES, LON_DEGREES, DENSITY, avCvr) %>%
+      mutate(across(c(LAT_DEGREES, LON_DEGREES), as.numeric)) %>%
+      left_join(habitat_lookup, by = c("REGION", "HABITAT_CD"))
+
+STTSTJ_leaf <-  full_join(NCRMP_STTSTJ_2013_21_density_site, NCRMP_STTSTJ_2013_21_cover_region) %>%
+      distinct(PRIMARY_SAMPLE_UNIT, .keep_all = TRUE) %>%
+      select(REGION, PRIMARY_SAMPLE_UNIT, YEAR, HABITAT_CD, LAT_DEGREES, LON_DEGREES, DENSITY, avCvr) %>%
+      mutate(across(c(LAT_DEGREES, LON_DEGREES), as.numeric)) %>%
+      left_join(habitat_lookup, by = c("REGION", "HABITAT_CD"))
+ 
+  
+  
+output$speciesSizeFreq <- renderUI({
+    req(input$freq_region)
+    species_choices <- size_freq(input$freq_region)
+    selectInput("speciesSizeFreq", "Select Species:", choices = species_choices)
   })
 
-  leaflet_map <- leaflet(filtered_data()) %>%
+
+
+  
+output$size_freq <- renderPlot({
+  
+  region_years <- list(
+    'FLK' = c(2014, 2018, 2022),
+    'SEFCRI' = c(2014, 2018, 2022),
+    'Tortugas' = c(2014, 2018, 2022),
+    'PRICO' = c(2014, 2021),
+    'STX' = c(2015, 2021),
+    'STTSTJ' = c(2013, 2021),
+    'GOM' = c(2018, 2022)
+  )
+
+   spp1 <- input$speciesSizeFreq
+   
+   tmp <- NCRMP_make_size_bins(region = input$freq_region, project = "NCRMP", years = region_years[[input$freq_region]])
+    
+    
+    domain_sub <- tmp$length_freq_domain_est %>%
+      mutate(YEAR = ifelse(YEAR == "2020", "2021", as.character(YEAR))) %>%
+      mutate(YEAR = as.factor(YEAR)) %>%
+      subset(SPECIES_NAME == spp1)
+    
+    demos_sub <- tmp$length_demos %>%
+      mutate(YEAR = ifelse(YEAR == "2020", "2021", as.character(YEAR))) %>%
+      mutate(YEAR = as.factor(YEAR)) %>%
+      subset(SPECIES_NAME == spp1)
+    
+    domain_sub <- domain_sub %>%
+      tidyr::expand(., REGION, SPECIES_NAME, SPECIES_CD, YEAR, bin_num) %>%
+      dplyr::full_join(., domain_sub, by = c('REGION', 'SPECIES_NAME',"SPECIES_CD", "YEAR", "bin_num")) %>%
+      dplyr::mutate(length_freq_domain = ifelse(is.na(length_freq_domain), 0, length_freq_domain))
+    
+
+    n_bins <- max(demos_sub$n_bins)
+    text_size = 14
+    angle = 45
+    hjust = 1
+    
+    min <- min(demos_sub$min)
+    bin_width <- min(demos_sub$bin_width)
+    
+    lab_vec = c(" 4- 10", " 11-15", " 16-20", " 21-25", " 26-30", " 31-35", " 36-45", " 46-65", " 66-85", " 86-105", "106+")
+    
+    p1 <- ggplot(data = domain_sub, 
+                 aes(x = as.integer(bin_num),
+                     y = length_freq_domain, fill = YEAR)) +
+      geom_bar(stat="identity", position = "dodge2", width = .9, color="black", size=.5) +
+      theme_minimal() + 
+      facet_wrap(~SPECIES_NAME) +
+      labs(y = "Length (cm)", x = "") +
+      scale_x_continuous(breaks = seq_along(lab_vec), labels = lab_vec) +
+      scale_y_continuous(expand = c(0, 0), limits = c(0, 1.1)) +
+      ggtitle(input$freq_region) +
+      theme(axis.text.x = element_text(size = text_size, angle = angle, hjust = hjust),
+            strip.text = element_text(face = "italic")) +
+      scale_fill_manual(values=c('deepskyblue4','springgreen3','gold1')) +
+      scale_color_manual(values=c('deepskyblue4','springgreen3','gold1'))
+    
+    print(p1)
+  }) 
+    
+
+
+
+
+
+output$map <- renderLeaflet({ #start leaflet
+ 
+ data <- reactive({
+    if (input$map_region == "Southeast Florida") {
+      SEFCRI_leaf
+    } else if (input$map_region == "Dry Tortugas") {
+      TORT_leaf
+    } else if (input$map_region == "Florida Keys") {
+      KEYS_leaf
+    } else if (input$map_region == "FGBNMS") {
+      FGBNMS_leaf
+    } else if (input$map_region == "PRICO") {
+      PRICO_leaf
+    } else if (input$map_region == "STTSTJ") {
+      STTSTJ_leaf
+    }
+    })
+  
+
+  leaflet_map <- leaflet(data()) %>%
     addProviderTiles(providers$Esri.OceanBasemap) %>%
     addCircleMarkers(
       lat = ~LAT_DEGREES,
@@ -717,9 +364,12 @@ domain_sub <-  domain_sub %>%
 
 
   leaflet_map
-})
   
-  output$coral_plot <- renderPlot({
+}) #end leaflet
+  
+  
+  
+output$coral_plot <- renderPlot({
     
     selected_region <- input$coral_region
     selected_year <- as.character(input$coral_year)
@@ -770,45 +420,248 @@ domain_sub <-  domain_sub %>%
       FLK_s_spp <- s$Domain_est_species
       generateCoralPlot("Florida Keys",selected_year, FLK_weightedmeans, FLK_om_spp, FLK_s_spp, FLK_rm_spp, species_list)
     }
-       
+    
+     else if (selected_region == "Puerto Rico") {
+      PRICO_weightedmeans <- NCRMP_PRICO_Occ_Den_CV
+      #, YEAR == max(NCRMP_DRM_FLK_Occ_Den_CV$YEAR))
+      om <- NCRMP_DRM_calculate_mortality(region = "PRICO", project = "NCRMP")
+      PRICO_om_spp <- om$Domain_est_old_mort_species
+      PRICO_rm_spp <- om$Domain_est_rec_mort_species
+      
+      # load species specific size - using max diameter here because DRM doesn't collect what's needed for area or volume
+      # note this is not standardized by mortality though***
+      s <- NCRMP_DRM_calculate_mean_colony_size(region = "PRICO", project = "NCRMP")
+      PRICO_s_spp <- s$Domain_est_species
+      generateCoralPlot("Puerto Rico",selected_year, PRICO_weightedmeans, PRICO_om_spp, PRICO_s_spp, PRICO_rm_spp, species_list)
+     }
+    
+    #"SEFCRI", "FLK", "Tortugas", "FGBNMS", "PRICO", "STTSTJ", "STX")
+    
+     else if (selected_region == "Flower Gardens") {
+      FGBNMS_weightedmeans <- NCRMP_FGBNMS_Occ_Den_CV
+      #, YEAR == max(NCRMP_DRM_FLK_Occ_Den_CV$YEAR))
+      om <- NCRMP_DRM_calculate_mortality(region = "FGBNMS", project = "NCRMP")
+      FGBNMS_om_spp <- om$Domain_est_old_mort_species
+      FGBNMS_rm_spp <- om$Domain_est_rec_mort_species
+      
+      # load species specific size - using max diameter here because DRM doesn't collect what's needed for area or volume
+      # note this is not standardized by mortality though***
+      s <- NCRMP_DRM_calculate_mean_colony_size(region = "FGBNMS", project = "NCRMP")
+      FGBNMS_s_spp <- s$Domain_est_species
+      generateCoralPlot("Flower Gardens",selected_year, FGBNMS_weightedmeans, FGBNMS_om_spp, FGBNMS_s_spp, FGBNMS_rm_spp, species_list)
+     }
+    
+        else if (selected_region == "St Thomas, St John") {
+      STTSTJ_weightedmeans <- NCRMP_STTSTJ_Occ_Den_CV
+      #, YEAR == max(NCRMP_DRM_FLK_Occ_Den_CV$YEAR))
+      om <- NCRMP_DRM_calculate_mortality(region = "STTSTJ", project = "NCRMP")
+      STTSTJ_om_spp <- om$Domain_est_old_mort_species
+      STTSTJ_rm_spp <- om$Domain_est_rec_mort_species
+      
+      # load species specific size - using max diameter here because DRM doesn't collect what's needed for area or volume
+      # note this is not standardized by mortality though***
+      s <- NCRMP_DRM_calculate_mean_colony_size(region = "STTSTJ", project = "NCRMP")
+      STTSTJ_s_spp <- s$Domain_est_species
+      generateCoralPlot("St Thomas, St John",selected_year, STTSTJ_weightedmeans, STTSTJ_om_spp, STTSTJ_s_spp, STTSTJ_rm_spp, species_list)
+        }
+    
+        else if (selected_region == "St Croix") {
+      STX_weightedmeans <- NCRMP_STX_Occ_Den_CV
+      #, YEAR == max(NCRMP_DRM_FLK_Occ_Den_CV$YEAR))
+      om <- NCRMP_DRM_calculate_mortality(region = "STX", project = "NCRMP")
+      STX_om_spp <- om$Domain_est_old_mort_species
+      STX_rm_spp <- om$Domain_est_rec_mort_species
+      
+      # load species specific size - using max diameter here because DRM doesn't collect what's needed for area or volume
+      # note this is not standardized by mortality though***
+      s <- NCRMP_DRM_calculate_mean_colony_size(region = "STX", project = "NCRMP")
+      STX_s_spp <- s$Domain_est_species
+      generateCoralPlot("St Croix",selected_year, STX_weightedmeans, STX_om_spp, STX_s_spp, STX_rm_spp, species_list)
+     }
+    
   
+ 
+
+    
+    
  
 })
   
+  
+  output$speciesSelect <- renderUI({
+    req(input$health_region)  # Require the selection of a health region
+
+    # Determine the choices based on the selected health region
+    choices <- switch(input$health_region,
+                      "Southeast Florida" = c("Stephanocoenia intersepta", "Siderastrea siderea", "Orbicella faveolata", "Siderastrea radians", "Meandrina meandrites", "Pseudodiploria strigosa", "Porites divaricata", "Solenastrea hyades", "Agaricia lamarcki", "Montastraea cavernosa", "Agaricia agaricites", "Porites astreoides", "Oculina diffusa", "Colpophyllia natans", "Solenastrea bournoni", "Dichocoenia stokesii", "Porites porites", "Pseudodiploria clivosa", "Acropora cervicornis", "Agaricia fragilis", "Madracis auretenra", "Diploria labyrinthiformis", "Eusmilia fastigiata", "Orbicella franksi", "Favia fragum", "Madracis decactis", "Porites furcata", "Mycetophyllia aliciae"),
+                      "Florida Keys" = c("Agaricia agaricites", "Siderastrea radians", "Porites divaricata", "Porites porites", "Helioceris cucullata", "Siderastrea siderea", "Agaricia humilis", "Porites furcata", "Eusmilia fastigiata", "Solenastrea bournoni", "Stephanocoenia intersepta", "Porites astreoides", "Agaricia lamarcki", "Orbicella franksi", "Montastraea cavernosa", "Diploria labyrinthiformis", "Agaricia fragilis", "Manicina areolata", "Orbicella faveolata", "Scolymia cubensis", "Pseudodiploria strigosa", "Porites branneri", "Dichocoenia stokesii", "Solenastrea hyades", "Orbicella annularis", "Colpophyllia natans", "Meandrina meandrites", "Oculina spp", "Madracis auretenra", "Madracis decactis", "Mycetophyllia aliciae", "Pseudodiploria clivosa", "Acropora cervicornis"),
+                      "Dry Tortugas" = c("Agaricia agaricites", "Siderastrea siderea", "Orbicella faveolata", "Orbicella franksi", "Montastraea cavernosa", "Porites divaricata", "Porites porites", "Agaricia fragilis", "Porites furcata", "Pseudodiploria clivosa", "Pseudodiploria strigosa", "Mycetophyllia aliciae", "Siderastrea radians", "Stephanocoenia intersepta", "Agaricia humilis", "Eusmilia fastigiata", "Agaricia lamarcki", "Diploria labyrinthiformis", "Porites astreoides", "Dichocoenia stokesii", "Acropora cervicornis", "Colpophyllia natans", "Solenastrea bournoni", "Madracis decactis", "Meandrina meandrites", "Helioceris cucullata", "Orbicella annularis"),
+                      "Flower Gardens" = c("Agaricia agaricites", "Agaricia fragilis", "Agaricia humilis", "Colpophyllia natans", "Helioceris cucullata", "Madracis auretenra", "Madracis decactis", "Meandrina meandrites", "Montastraea cavernosa", "Mussa angulosa", "Orbicella annularis", "Orbicella faveolata", "Orbicella franksi", "Porites astreoides", "Pseudodiploria strigosa", "Scolymia cubensis", "Siderastrea siderea", "Stephanocoenia intersepta", "Tubastraea coccinea"),
+                      "Puerto Rico" = c("Acropora cervicornis", "Acropora palmata", "Agaricia agaricites", "Agaricia fragilis", "Agaricia grahamae", "Agaricia humilis", "Agaricia lamarcki", "Agaricia tenuifolia", "Colpophyllia natans", "Dendrogyra cylindrus", "Dichocoenia stokesii", "Diploria labyrinthiformis", "Eusmilia fastigiata", "Favia fragum", "Helioceris cucullata", "Madracis auretenra", "Madracis decactis", "Manicina areolata", "Meandrina danae", "Meandrina jacksoni", "Meandrina meandrites", "Montastraea cavernosa", "Mycetophyllia aliciae", "Mycetophyllia ferox", "Oculina diffusa", "Orbicella annularis", "Orbicella faveolata", "Orbicella franksi", "Porites astreoides", "Porites branneri", "Porites divaricata", "Porites furcata", "Porites porites", "Pseudodiploria clivosa", "Pseudodiploria strigosa", "Scolymia cubensis", "Siderastrea radians", "Siderastrea siderea", "Solenastrea bournoni", "Stephanocoenia intersepta"),
+                      "St Thomas, St John" = c("Acropora cervicornis", "Acropora palmata", "Agaricia agaricites", "Agaricia fragilis", "Agaricia grahamae", "Agaricia humilis", "Agaricia lamarcki", "Agaricia tenuifolia", "Colpophyllia natans", "Dendrogyra cylindrus", "Dichocoenia stokesii", "Diploria labyrinthiformis", "Eusmilia fastigiata", "Favia fragum", "Helioceris cucullata", "Isophyllia sinuosa", "Madracis auretenra", "Madracis carmabi", "Madracis decactis", "Madracis formosa", "Manicina areolata", "Meandrina meandrites", "Montastraea cavernosa", "Mycetophyllia aliciae", "Orbicella annularis", "Orbicella faveolata", "Orbicella franksi", "Porites astreoides", "Porites colonensis", "Porites divaricata", "Porites furcata", "Porites porites", "Pseudodiploria clivosa", "Pseudodiploria strigosa", "Siderastrea radians", "Siderastrea siderea", "Solenastrea bournoni", "Stephanocoenia intersepta"),
+                      "St Croix" = c("Acropora palmata", "Agaricia agaricites", "Agaricia fragilis", "Agaricia grahamae", "Agaricia humilis", "Agaricia lamarcki", "Agaricia tenuifolia", "Colpophyllia natans", "Dichocoenia stokesii", "Diploria labyrinthiformis", "Eusmilia fastigiata", "Favia fragum", "Helioceris cucullata", "Isophyllastrea rigida", "Isophyllia sinuosa", "Madracis auretenra", "Madracis decactis", "Madracis formosa", "Manicina areolata", "Meandrina meandrites", "Montastraea cavernosa", "Mycetophyllia aliciae", "Orbicella annularis", "Orbicella faveolata", "Orbicella franksi", "Porites astreoides", "Porites branneri", "Porites colonensis", "Porites divaricata", "Porites furcata", "Porites porites", "Pseudodiploria clivosa", "Pseudodiploria strigosa", "Siderastrea radians", "Siderastrea siderea", "Solenastrea bournoni", "Stephanocoenia intersepta")
+    )
+  
+    checkboxGroupInput("speciesSelect", "Select Species:", choices)
+})
+  
+
+output$bleach <- renderPlot({
+  
+    dataset <- switch(input$health_region,
+                      "Southeast Florida" = NCRMP_DRM_SEFCRI_2014_22_ble_prev_species_region,
+                      "Florida Keys" = NCRMP_DRM_FLK_2014_22_ble_prev_species_region,
+                      "Dry Tortugas" = NCRMP_DRM_Tort_2014_22_ble_prev_species_region,
+                      "Flower Gardens" = NCRMP_FGBNMS_2013_22_ble_prev_species_region,
+                      "Puerto Rico" = NCRMP_PRICO_2014_21_ble_prev_species_region,
+                      "St Thomas, St John" = NCRMP_STTSTJ_2013_21_ble_prev_species_region,
+                      "St Croix" = NCRMP_STX_2015_21_ble_prev_species_region)
+
+    dataset %>%
+      filter(species_name %in% input$speciesSelect) %>%
+      filter(YEAR == input$health_year) %>%
+      ggplot(aes(x = reorder(species_name, avBlePrev), y = avBlePrev)) +
+      geom_bar(stat = "identity", fill = "deepskyblue4") +
+      geom_errorbar(aes(ymin = avBlePrev, ymax = avBlePrev + SE_B), width = 0.1) +
+      coord_flip() +
+      guides(fill = "none") +
+      labs(y = "Bleaching Prevalence (%)", x = "", title = input$health_region) +
+      scale_y_continuous(expand = c(0, 0)) +
+      theme_Publication(base_size = 20) + 
+      theme(axis.text.y = element_text(face = "italic"))
+})
 
 
-  output$benthic_plot <- renderPlotly({
+output$disease <- renderPlot({
     
+    dataset <- switch(input$health_region,
+                      "Southeast Florida" =  NCRMP_DRM_SEFCRI_2014_22_dis_prev_species_region,
+                      "Florida Keys" = NCRMP_DRM_FLK_2014_22_dis_prev_species_region,
+                      "Dry Tortugas" = NCRMP_DRM_Tort_2014_22_dis_prev_species_region,
+                      "Flower Gardens" = NCRMP_FGBNMS_2013_22_dis_prev_species_region,
+                      "Puerto Rico" = NCRMP_PRICO_2014_21_dis_prev_species_region,
+                      "St Thomas, St John" = NCRMP_STTSTJ_2013_21_dis_prev_species_region,
+                      "St Croix" = NCRMP_STX_2015_21_dis_prev_species_region)
+    
+    dataset %>% 
+      filter(species_name %in% input$speciesSelect) %>%
+      filter(YEAR == input$health_year) %>%
+      ggplot(aes(x = reorder(species_name, avDisPrev), y = avDisPrev)) +
+      geom_bar(stat = "identity", fill = "deepskyblue4") + 
+      geom_errorbar(aes(x = reorder(species_name, avDisPrev), ymin = avDisPrev,  ymax = avDisPrev+SE_D),width = 0.1) +
+      coord_flip() + 
+      guides(fill = "none") +
+      labs(y = "Disease Prevalence (%)", x = "", title = "Southeast Florida") + 
+      scale_y_continuous(expand = c(0, 0), limits = c(0, 4.5)) +
+      theme_Publication(base_size = 20) +
+      theme(axis.text.y = element_text(face = "italic")) 
+    
+      })
+
+
+    
+output$dry_tortugas_plot <- renderPlot({
+      
+      
     selected_regions <- input$region
-    
     selected_covers <- input$cover
     
-    if (is.null(selected_regions)) {
-      return(plot_ly())  
-    }
-
-    selected_years <- as.character(input$year[1]:input$year[2])
-
-
-    plot_list <- list()
-
-    for (region_name in selected_regions) {
-      region_data <- switch(
-        region_name,
-        "Dry Tortugas" = NCRMP_Tort_2014_22_cover_region %>% dplyr::mutate(YEAR = ifelse(YEAR == 2020, 2021, as.numeric(YEAR))),
-        "Southeast Florida" = NCRMP_SEFCRI_2014_22_cover_region,
-        "Florida Keys" = NCRMP_FLK_2014_22_cover_region %>% filter(YEAR != 2020),
-        NULL
-      )
-
+    if ("Dry Tortugas" %in% selected_regions) {
+      selected_years <- as.character(input$year[1]:input$year[2])
       
-      if (!is.null(region_data)) {
-        plot_list[[region_name]] <- generateRegionPlot(region_data, selected_years, region_name, selected_covers)
-      }
+      region_data <- NCRMP_Tort_2014_22_cover_region %>% dplyr::mutate(YEAR = ifelse(YEAR == 2020, 2021, as.numeric(YEAR)))
+      
+      generateRegionPlot(region_data, selected_years, "Dry Tortugas", selected_covers)
     }
+  })
+    
+    
+    
+     output$flower_gardens_plot <- renderPlot({
+      
+    selected_regions <- input$region
+    selected_covers <- input$cover
+    
+    if ("Flower Gardens" %in% selected_regions) {
+      selected_years <- as.character(input$year[1]:input$year[2])
+      
+    region_data <- NCRMP_FGBNMS_2013_22_cover_region %>% dplyr::mutate(YEAR = ifelse(YEAR == 2020, 2021, as.numeric(YEAR)))
+      
+      generateRegionPlot(region_data, selected_years, "Flower Gardens", selected_covers)
+    }
+  })
+     
 
-    final_plot <- subplot(plot_list) %>% layout(title = 'Coral Coverage by Region')
-    return(final_plot)
+  output$puerto_rico_plot <- renderPlot({
+      
+      
+    selected_regions <- input$region
+    selected_covers <- input$cover
+    
+    if ("Puerto Rico" %in% selected_regions) {
+      selected_years <- as.character(input$year[1]:input$year[2])
+      
+      region_data <- NCRMP_PRICO_2014_21_cover_region %>% dplyr::mutate(YEAR = ifelse(YEAR == 2020, 2021, as.numeric(YEAR)))
+      
+      generateRegionPlot(region_data, selected_years, "Puerto Rico", selected_covers)
+    }
+  })
+  
+    output$st_thomas_st_john_plot <- renderPlot({
+      
+      
+    selected_regions <- input$region
+    selected_covers <- input$cover
+    
+    if ("St Thomas, St John" %in% selected_regions) {
+      selected_years <- as.character(input$year[1]:input$year[2])
+      
+      region_data <- NCRMP_STTSTJ_2013_21_cover_region %>% dplyr::mutate(YEAR = ifelse(YEAR == 2020, 2021, as.numeric(YEAR)))
+      
+      generateRegionPlot(region_data, selected_years, "St Thomas, St John", selected_covers)
+    }
+  })
+    
+  output$st_croix_plot <- renderPlot({
+      
+      
+    selected_regions <- input$region
+    selected_covers <- input$cover
+    
+    if ("St Croix" %in% selected_regions) {
+      selected_years <- as.character(input$year[1]:input$year[2])
+      
+      region_data <- NCRMP_STX_2015_21_cover_region %>% dplyr::mutate(YEAR = ifelse(YEAR == 2020, 2021, as.numeric(YEAR)))
+      
+      generateRegionPlot(region_data, selected_years, "St Croix", selected_covers)
+    }
+  })
+    
+  
+  output$southeast_florida_plot <- renderPlot({
+    selected_regions <- input$region
+    selected_covers <- input$cover
+    
+    if ("Southeast Florida" %in% selected_regions) {
+      selected_years <- as.character(input$year[1]:input$year[2])
+      
+      region_data <- NCRMP_SEFCRI_2014_22_cover_region
+      
+      generateRegionPlot(region_data, selected_years, "Southeast Florida", selected_covers)
+    }
+  })
+  
+  output$florida_keys_plot <- renderPlot({
+    selected_regions <- input$region
+    selected_covers <- input$cover
+    
+    if ("Florida Keys" %in% selected_regions) {
+      selected_years <- as.character(input$year[1]:input$year[2])
+      
+      region_data <- NCRMP_FLK_2014_22_cover_region %>% filter(YEAR != 2020)
+      
+      generateRegionPlot(region_data, selected_years, "Florida Keys", selected_covers)
+    }
   })
 }
 
