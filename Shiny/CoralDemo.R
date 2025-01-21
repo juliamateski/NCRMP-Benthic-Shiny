@@ -80,31 +80,12 @@ generateCoralPlot <- function(region, selected_year, weightedmeans, om_spp, s_sp
     theme(axis.text.y = element_blank(), axis.title.y = element_blank())
   
   
-  combined_plot <- egg::ggarrange(dens_plot, om_plot, rm_plot, size_plot, ncol = 4)  # You can adjust ncol as needed
+  combined_plot <- egg::ggarrange(dens_plot, om_plot, rm_plot, size_plot, ncol = 4)  
   
-  # Print or save the combined plot
+
   print(combined_plot)
   
-  
-  # 
-  # dens_plot <- plot_ly(data = newdat, x = ~avDen, y = ~SPECIES_CD, type = "scatter", mode = "markers") %>%
-  #   #add_errorbars(x = ~avDen, y = ~SPECIES_CD, xmin = ~avDen - SE_avDen, xmax = ~avDen + SE_avDen) %>%
-  #   layout(xaxis = list(title = expression(Density ~ (corals/m^{2})), yaxis = list(title = "")))
-  # 
-  # om_plot <- plot_ly(data = newdat, x = ~avMortOld, y = ~SPECIES_CD, type = "scatter", mode = "markers") %>%
-  #   #add_errorbars(x = ~avMortOld, y = ~SPECIES_CD, xmin = ~avMortOld - SE_avMortOld, xmax = ~avMortOld + SE_avMortOld) %>%
-  #   layout(xaxis = list(title = expression(Old ~ mortality ~ ("%")), yaxis = list(title = "")))
-  # 
-  # rm_plot <- plot_ly(data = newdat, x = ~avMortRec, y = ~SPECIES_CD, type = "scatter", mode = "markers") %>%
-  #   #add_errorbars(x = ~avMortRec, y = ~SPECIES_CD, xmin = ~avMortRec - SE_avMortRec, xmax = ~avMortRec + SE_avMortRec) %>%
-  #   layout(xaxis = list(title = expression(Recent ~ mortality ~ ("%")), yaxis = list(title = "")))
-  # 
-  # 
-  # size_plot <- plot_ly(data = newdat, x = ~avMaxdiam, y = ~SPECIES_CD, type = "scatter", mode = "markers") %>%
-  #   #add_errorbars(x = ~avMaxdiam, y = ~SPECIES_CD, xmin = ~avMaxdiam - SE_maxdiam, xmax = ~avMaxdiam + SE_maxdiam) %>%
-  #   layout(xaxis = list(title = expression(Maximum ~ diameter ~ (cm)), yaxis = list(title = "")))
-  # 
-  #   subplot(dens_plot, om_plot, rm_plot, size_plot, nrows = 2)  
+
   
   return(NULL)
   
